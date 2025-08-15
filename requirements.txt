@@ -4,3 +4,5 @@ google-api-python-client
 openai
 lancedb
 pandas
+tabulate
+openpyxl

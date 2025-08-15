@@ -1,0 +1,7 @@
+db
+__pycache__
+.env
+*.lock
+temp*
+srt_files
+DS_Store

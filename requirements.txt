@@ -1,0 +1,6 @@
+crewai[tools]
+python-dotenv
+google-api-python-client
+openai
+lancedb
+pandas

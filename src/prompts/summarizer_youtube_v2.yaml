@@ -26,7 +26,9 @@ prompt: |
   ---
 
   ## 📄 **Final Output JSON Schema**
-  ```json
+  
+  Your response must be a valid JSON object with this structure:
+  
   {
     "high_level_overview": "String — One paragraph capturing the essence of the video from an engineering viewpoint.",
     "technical_breakdown": [
@@ -58,7 +60,8 @@ prompt: |
 
   ## 📝 **Formatting Rules**
   
-  - Only produce the JSON object above — no extra text.
+  - CRITICAL: Only produce the raw JSON object — no markdown code blocks, no extra text, no ```json wrapper.
+  - Your response must start with { and end with } as valid JSON.
   - technical_breakdown must combine tools, architectures, and processes, differentiated by type.
   - Use "type": "process" for ordered steps; always include step_number.
   - Use "type": "tool" for any library, API, or SDK; include its name and purpose.

@@ -12,7 +12,7 @@ import os
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 
-from utils import get_config, setup_logging
+from src.utils import get_config, setup_logging
 
 load_dotenv()
 
@@ -45,20 +45,24 @@ def search_youtube_videos_api(search_query, max_results=None):
         # Build the YouTube API client
         youtube_config = get_config("api.youtube", {})
         api_version = youtube_config.get("api_version", "v3")
+        timeout = youtube_config.get("timeout", 30)
+
         youtube = build("youtube", api_version, developerKey=api_key)
 
         # Call the search.list method to retrieve results matching the query
-        search_response = (
-            youtube.search()
-            .list(
-                q=search_query,
-                part="id,snippet",
-                maxResults=max_results,
-                type=youtube_config.get("type", "video"),
-                order=youtube_config.get("order", "relevance"),
-            )
-            .execute()
+        search_request = youtube.search().list(
+            q=search_query,
+            part="id,snippet",
+            maxResults=max_results,
+            type=youtube_config.get("type", "video"),
+            order=youtube_config.get("order", "relevance"),
         )
+
+        # Execute with timeout handling
+        import socket
+
+        socket.setdefaulttimeout(timeout)
+        search_response = search_request.execute()
 
         videos = []
         for search_result in search_response.get("items", []):

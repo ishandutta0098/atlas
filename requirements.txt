@@ -6,3 +6,6 @@ lancedb
 pandas
 tabulate
 openpyxl
+gradio
+yt-dlp
+pyyaml

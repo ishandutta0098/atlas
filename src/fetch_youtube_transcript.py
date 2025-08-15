@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from yt_dlp import YoutubeDL
 
-from utils import ensure_output_folder, get_config, get_worker_count, setup_logging
+from src.utils import ensure_output_folder, get_config, get_worker_count, setup_logging
 
 
 class YouTubeTranscriptFetcher:

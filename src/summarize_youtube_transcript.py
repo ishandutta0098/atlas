@@ -9,7 +9,7 @@ import yaml
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from utils import (
+from src.utils import (
     ensure_output_folder,
     get_config,
     get_prompt_path,

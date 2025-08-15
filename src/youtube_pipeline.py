@@ -23,10 +23,10 @@ from typing import Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 
-from fetch_youtube_transcript import YouTubeTranscriptFetcher
-from summarize_youtube_transcript import YouTubeTranscriptSummarizer
-from utils import ensure_output_folder, get_config, setup_logging
-from youtube_video_search import search_youtube_videos_api
+from src.fetch_youtube_transcript import YouTubeTranscriptFetcher
+from src.summarize_youtube_transcript import YouTubeTranscriptSummarizer
+from src.utils import ensure_output_folder, get_config, setup_logging
+from src.youtube_video_search import search_youtube_videos_api
 
 load_dotenv()
 

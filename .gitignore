@@ -75,4 +75,5 @@ srt_files
 temp*
 .env
 *.xlsx
+*.json
 # End of Selection

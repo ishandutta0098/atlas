@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from yt_dlp import YoutubeDL
 
+from utils import ensure_output_folder, get_config, get_worker_count, setup_logging
+
 
 class YouTubeTranscriptFetcher:
     """A class to fetch transcripts from YouTube videos.
@@ -14,48 +16,31 @@ class YouTubeTranscriptFetcher:
 
     def __init__(
         self,
-        output_folder: str = "transcripts",
-        language: str = "en",
+        output_folder: Optional[str] = None,
+        language: Optional[str] = None,
         num_workers: Optional[int] = None,
     ):
         """Initialize the YouTubeTranscriptFetcher.
 
         Args:
-            output_folder (str): Directory where transcripts will be saved.
-                Defaults to "transcripts".
-            language (str): Language code for subtitles. Defaults to "en".
+            output_folder (Optional[str]): Directory where transcripts will be saved.
+                If None, uses config default.
+            language (Optional[str]): Language code for subtitles. If None, uses config default.
             num_workers (Optional[int]): Number of concurrent workers for parallel processing.
-                If None, auto-detects based on CPU count (min 2, max 8).
-                If 0, forces sequential processing.
-                If > 0, uses specified number of workers.
+                If None, auto-detects based on config and CPU count.
         """
-        self.output_folder = output_folder
-        self.language = language
-        self.num_workers = self._determine_workers(num_workers)
-        self._ensure_output_folder()
+        # Initialize configuration and logging
+        setup_logging()
 
-    def _determine_workers(self, num_workers: Optional[int]) -> int:
-        """Determine the number of workers to use for parallel processing.
+        # Set configuration values
+        self.output_folder = output_folder or get_config(
+            "processing.transcripts.output_folder", "transcripts"
+        )
+        self.language = language or get_config("processing.transcripts.language", "en")
+        self.num_workers = get_worker_count(num_workers)
 
-        Args:
-            num_workers (Optional[int]): User-specified number of workers.
-
-        Returns:
-            int: Number of workers to use (0 means sequential processing).
-        """
-        if num_workers is not None:
-            return max(0, num_workers)  # Ensure non-negative
-
-        # Auto-detect based on CPU count
-        cpu_count = os.cpu_count() or 1
-        # Use 50% of available cores, with a minimum of 2 and maximum of 8
-        auto_workers = max(2, min(8, cpu_count // 2))
-        return auto_workers
-
-    def _ensure_output_folder(self) -> None:
-        """Create the output folder if it doesn't exist."""
-        if not os.path.exists(self.output_folder):
-            os.makedirs(self.output_folder)
+        # Ensure output folder exists
+        self.output_folder = ensure_output_folder(self.output_folder)
 
     def _get_ydl_opts(self) -> dict:
         """Get the yt-dlp options configuration.
@@ -64,12 +49,19 @@ class YouTubeTranscriptFetcher:
             dict: Configuration options for yt-dlp.
         """
         return {
-            "skip_download": True,
-            "writesubtitles": True,  # human captions
-            "writeautomaticsub": True,  # auto captions
+            "skip_download": get_config("download.skip_download", True),
+            "writesubtitles": get_config(
+                "download.write_subtitles", True
+            ),  # human captions
+            "writeautomaticsub": get_config(
+                "download.write_automatic_sub", True
+            ),  # auto captions
             "subtitleslangs": [self.language],
-            "subtitlesformat": "srt",
-            "outtmpl": os.path.join(self.output_folder, "%(id)s.%(ext)s"),
+            "subtitlesformat": get_config("download.subtitles_format", "srt"),
+            "outtmpl": os.path.join(
+                self.output_folder,
+                get_config("download.output_template", "%(id)s.%(ext)s"),
+            ),
         }
 
     def fetch_transcript(self, url: str) -> bool:
@@ -170,8 +162,8 @@ if __name__ == "__main__":
     # Example URLs
     urls = [
         "https://www.youtube.com/watch?v=UV81LAb3x2g",
-        "https://www.youtube.com/watch?v=q6kJ71tEYqM",
-        "https://www.youtube.com/watch?v=gpz6C_2l5jI",
+        # "https://www.youtube.com/watch?v=q6kJ71tEYqM",
+        # "https://www.youtube.com/watch?v=gpz6C_2l5jI",
     ]
 
     # Initialize the fetcher

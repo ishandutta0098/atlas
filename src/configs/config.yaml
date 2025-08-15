@@ -1,0 +1,76 @@
+# Atlas Project Configuration
+# Main configuration file for the YouTube transcript processing project
+
+# API Configuration
+api:
+  openai:
+    model: "gpt-4o-mini"
+    timeout: 180  # seconds
+    max_retries: 3
+  youtube:
+    # YouTube Data API configuration
+    api_version: "v3"
+    max_results: 5
+    order: "relevance"
+    type: "video"
+
+# Processing Configuration
+processing:
+  # Parallel processing settings
+  workers:
+    auto_detect: true
+    min_workers: 2
+    max_workers: 16
+    cpu_ratio: 0.5  # Use 50% of available CPU cores for auto-detection
+    
+  # Transcript processing
+  transcripts:
+    language: "en"
+    format: "srt"
+    output_folder: "transcripts"
+    
+  # Summary processing
+  summaries:
+    output_folder: "summaries"
+    file_suffix: ".json"
+
+# File paths and directories
+paths:
+  # Prompt templates
+  prompts:
+    base_dir: "src/prompts"
+    summarizer_v1: "summarizer_youtube.yaml"
+    summarizer_v2: "summarizer_youtube_v2.yaml"
+    default_summarizer: "summarizer_youtube_v2.yaml"
+  
+  # Output directories
+  outputs:
+    transcripts: "transcripts"
+    summaries: "summaries"
+    logs: "logs"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "[%(levelname)s] %(message)s"
+  file_logging: false
+  log_file: "logs/atlas.log"
+
+# YouTube Download Configuration
+download:
+  # yt-dlp options
+  skip_download: true
+  write_subtitles: true
+  write_automatic_sub: true
+  subtitles_format: "srt"
+  output_template: "%(id)s.%(ext)s"
+
+# Search Configuration
+search:
+  default_max_results: 10
+  description_max_length: 200
+  
+# Environment variables (defaults, can be overridden by actual env vars)
+environment:
+  openai_api_key_env: "OPENAI_API_KEY"
+  youtube_api_key_env: "YOUTUBE_API_KEY"

@@ -12,10 +12,12 @@ import os
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 
+from utils import get_config, setup_logging
+
 load_dotenv()
 
 
-def search_youtube_videos_api(search_query, max_results=10):
+def search_youtube_videos_api(search_query, max_results=None):
     """
     Search for YouTube videos using the YouTube Data API.
 
@@ -26,6 +28,13 @@ def search_youtube_videos_api(search_query, max_results=10):
     Returns:
         list: List of video information dictionaries
     """
+    # Initialize configuration
+    setup_logging()
+
+    # Get configuration values
+    if max_results is None:
+        max_results = get_config("search.default_max_results", 10)
+
     api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
         raise ValueError(
@@ -34,7 +43,9 @@ def search_youtube_videos_api(search_query, max_results=10):
 
     try:
         # Build the YouTube API client
-        youtube = build("youtube", "v3", developerKey=api_key)
+        youtube_config = get_config("api.youtube", {})
+        api_version = youtube_config.get("api_version", "v3")
+        youtube = build("youtube", api_version, developerKey=api_key)
 
         # Call the search.list method to retrieve results matching the query
         search_response = (
@@ -43,8 +54,8 @@ def search_youtube_videos_api(search_query, max_results=10):
                 q=search_query,
                 part="id,snippet",
                 maxResults=max_results,
-                type="video",
-                order="relevance",
+                type=youtube_config.get("type", "video"),
+                order=youtube_config.get("order", "relevance"),
             )
             .execute()
         )
@@ -66,14 +77,18 @@ def search_youtube_videos_api(search_query, max_results=10):
             else:
                 continue
 
+            # Get description max length from config
+            description_max_length = get_config("search.description_max_length", 200)
+            description = search_result["snippet"]["description"]
+
             video_info = {
                 "title": search_result["snippet"]["title"],
                 "channel": search_result["snippet"]["channelTitle"],
                 "url": f"https://www.youtube.com/watch?v={video_id}",
                 "description": (
-                    search_result["snippet"]["description"][:200] + "..."
-                    if len(search_result["snippet"]["description"]) > 200
-                    else search_result["snippet"]["description"]
+                    description[:description_max_length] + "..."
+                    if len(description) > description_max_length
+                    else description
                 ),
                 "published_at": search_result["snippet"]["publishedAt"],
                 "video_id": video_id,

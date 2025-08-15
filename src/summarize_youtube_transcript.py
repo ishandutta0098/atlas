@@ -9,6 +9,14 @@ import yaml
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from utils import (
+    ensure_output_folder,
+    get_config,
+    get_prompt_path,
+    get_worker_count,
+    setup_logging,
+)
+
 load_dotenv()
 
 
@@ -23,43 +31,23 @@ class YouTubeTranscriptSummarizer:
         Args:
             api_key (Optional[str]): OpenAI API key. If None, uses OPENAI_API_KEY env var.
             num_workers (Optional[int]): Number of concurrent workers for parallel processing.
-                If None, auto-detects based on CPU count (min 2, max 8).
-                If 0, forces sequential processing.
-                If > 0, uses specified number of workers.
+                If None, auto-detects based on config and CPU count.
         """
         print("[INIT] Initializing YouTubeTranscriptSummarizer...")
+
+        # Initialize configuration and logging
+        setup_logging()
+
         print("[INIT] Setting up OpenAI client...")
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        self.model = get_config("api.openai.model", "gpt-5")
+        self.timeout = get_config("api.openai.timeout", 120)
+
         print("[INIT] Loading prompt template...")
         self.prompt_template = self._load_prompt_template()
         print("[INIT] Determining number of workers...")
-        self.num_workers = self._determine_workers(num_workers)
+        self.num_workers = get_worker_count(num_workers)
         print(f"[INIT] Initialized with {self.num_workers} workers")
-
-    def _determine_workers(self, num_workers: Optional[int]) -> int:
-        """Determine the number of workers to use for parallel processing.
-
-        Args:
-            num_workers (Optional[int]): User-specified number of workers.
-
-        Returns:
-            int: Number of workers to use (0 means sequential processing).
-        """
-        print(f"[WORKERS] Determining workers - user specified: {num_workers}")
-        if num_workers is not None:
-            workers = max(0, num_workers)
-            print(f"[WORKERS] Using user-specified workers: {workers}")
-            return workers
-
-        # For API calls, we can be more aggressive with workers since it's I/O bound
-        # OpenAI has rate limits, so we balance between speed and avoiding rate limits
-        cpu_count = os.cpu_count() or 1
-        # Use more workers for I/O-bound API calls (min 4, max 16)
-        auto_workers = max(4, min(16, cpu_count))
-        print(
-            f"[WORKERS] Auto-detected {cpu_count} CPUs, using {auto_workers} workers for I/O-bound API calls"
-        )
-        return auto_workers
 
     def _load_prompt_template(self) -> str:
         """Load the prompt template from YAML file.
@@ -67,9 +55,7 @@ class YouTubeTranscriptSummarizer:
         Returns:
             str: The loaded prompt template.
         """
-        prompt_path = os.path.join(
-            os.path.dirname(__file__), "prompts", "summarizer_youtube_v2.yaml"
-        )
+        prompt_path = get_prompt_path()
         print(f"[PROMPT] Loading prompt template from: {prompt_path}")
 
         with open(prompt_path, "r", encoding="utf-8") as file:
@@ -157,12 +143,12 @@ class YouTubeTranscriptSummarizer:
 
             # Make API call to OpenAI
             response = client.chat.completions.create(
-                model="gpt-5",
+                model=self.model,
                 messages=[
                     {"role": "system", "content": self.prompt_template},
                     {"role": "user", "content": user_message},
                 ],
-                timeout=120,  # 2 minute timeout
+                timeout=self.timeout,
             )
 
             api_time = time.time() - api_start
@@ -347,11 +333,8 @@ class YouTubeTranscriptSummarizer:
             return {}
 
         if output_folder:
-            if not os.path.exists(output_folder):
-                print(f"[BATCH] Creating output folder: {output_folder}")
-                os.makedirs(output_folder)
-            else:
-                print(f"[BATCH] Output folder exists: {output_folder}")
+            output_folder = ensure_output_folder(output_folder)
+            print(f"[BATCH] Using output folder: {output_folder}")
         else:
             print("[BATCH] No output folder specified, will print to stdout")
 
@@ -474,9 +457,9 @@ def main():
 # Example usage for batch processing
 if __name__ == "__main__":
     transcript_paths = [
-        "/Users/ishandutta/Documents/code/atlas/transcripts/gpz6C_2l5jI.en.srt",
+        # "/Users/ishandutta/Documents/code/atlas/transcripts/gpz6C_2l5jI.en.srt",
         # "/Users/ishandutta/Documents/code/atlas/transcripts/q6kJ71tEYqM.en.srt",
-        # "/Users/ishandutta/Documents/code/atlas/transcripts/UV81LAb3x2g.en.srt"
+        "/Users/ishandutta/Documents/code/atlas/transcripts/UV81LAb3x2g.en.srt"
     ]
 
     summarizer = YouTubeTranscriptSummarizer()

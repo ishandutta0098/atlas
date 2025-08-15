@@ -1,10 +1,78 @@
-db
-__pycache__
-.env
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.pyo
+*.pyd
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# macOS
+.DS_Store
+
+# Lock files
 *.lock
-temp*
-srt_files
-DS_Store
+
+# Test, coverage, and profiling
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+pytestdebug.log
+
+# Logs
+*.log
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+.pyre/
+
+# Cython debug symbols
+cython_debug/
+
+# Other
+*.sqlite3
+*.db
+*.bak
+*.tmp
+*.swp
+*.swo
+
+# Local data and output
+db
 summaries
 transcripts
 pipeline_output
+srt_files
+temp*
+.env
+*.xlsx
+# End of Selection

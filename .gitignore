@@ -76,4 +76,7 @@ temp*
 .env
 *.xlsx
 *.json
+*.pdf
+*output*
+storage
 # End of Selection

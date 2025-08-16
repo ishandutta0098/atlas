@@ -1,17 +1,18 @@
 """
-YouTube Processing Pipeline - Gradio Web Interface
+Atlas - AI-Powered Content Analysis Platform
 
-This script provides a web-based interface for the complete YouTube processing pipeline using Gradio.
-It integrates all components (video search, transcript fetching, summarization) into a user-friendly web app.
+This script provides a comprehensive web-based interface for AI-powered content analysis using Gradio.
+It integrates multiple analysis pipelines (YouTube processing, academic papers RAG, educational content generation) into a unified platform.
 
 Key Features:
-- YouTube video search with natural language queries
-- Transcript fetching from found videos
-- AI-powered summarization for technical content
-- Step-by-step pipeline visualization
-- Real-time processing status updates
-- Support for multiple concurrent workers
-- Professional web interface with custom styling
+- YouTube video analysis pipeline with natural language search
+- Automatic transcript extraction and AI-powered summarization
+- Academic papers RAG system with semantic search and citations
+- Educational assignment generation for hands-on learning
+- AI-powered comparison analysis with parallel processing
+- Real-time pipeline execution with step-by-step visualization
+- Professional web interface with responsive design and custom styling
+- Support for multiple concurrent workers and batch processing
 
 Required Dependencies:
 - gradio: Web interface framework
@@ -1269,21 +1270,22 @@ def create_gradio_app():
     }
     """
 
-    with gr.Blocks(css=css, title="🎬 YouTube Processing Pipeline") as app:
+    with gr.Blocks(css=css, title="🎬 Atlas") as app:
         # Header Section
         with gr.Row():
             with gr.Column(elem_classes=["header-section"]):
                 gr.HTML(
                     """
                 <div style="text-align: center;">
-                    <h1>🎬 YouTube Processing Pipeline</h1>
-                    <p>Comprehensive AI-powered pipeline for YouTube video analysis and summarization</p>
-                    <div style="display: flex; justify-content: center; gap: 25px; margin-top: 20px; flex-wrap: wrap;">
-                        <div>🔍 <strong>Video Search</strong><br/>YouTube Data API integration</div>
-                        <div>📝 <strong>Transcript Fetching</strong><br/>Automatic subtitle extraction</div>
-                        <div>🤖 <strong>AI Summarization</strong><br/>Technical content analysis</div>
-                        <div>⚡ <strong>Parallel Processing</strong><br/>Concurrent workflow execution</div>
-                        <div>📊 <strong>Detailed Tracking</strong><br/>Step-by-step visualization</div>
+                    <h1>🎬 Atlas</h1>
+                    <p>AI-Powered Content Analysis Platform for Educational and Research Content</p>
+                    <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px; flex-wrap: wrap;">
+                        <div>🔍 <strong>YouTube Pipeline</strong><br/>Video search & analysis</div>
+                        <div>📚 <strong>Academic RAG</strong><br/>Papers search & citations</div>
+                        <div>📝 <strong>Assignment Generator</strong><br/>Educational content creation</div>
+                        <div>🤖 <strong>AI Analysis</strong><br/>Parallel content processing</div>
+                        <div>📊 <strong>Comparison Engine</strong><br/>Multi-video insights</div>
+                        <div>⚡ <strong>Real-time Tracking</strong><br/>Progressive visualization</div>
                     </div>
                 </div>
                 """
@@ -1567,7 +1569,7 @@ if __name__ == "__main__":
 
         # Parse command line arguments for local development
         parser = argparse.ArgumentParser(
-            description="Gradio Web Interface for YouTube Processing Pipeline"
+            description="Atlas - AI-Powered Content Analysis Platform"
         )
         parser.add_argument(
             "--host", type=str, default="127.0.0.1", help="Host to run the server on"

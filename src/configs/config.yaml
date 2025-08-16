@@ -4,7 +4,8 @@
 # API Configuration
 api:
   openai:
-    model: "gpt-4o-mini"
+    model: "gpt-5-mini"
+    embedding_model: "text-embedding-3-small"
     timeout: 180  # seconds
     max_retries: 3
   youtube:

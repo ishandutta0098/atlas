@@ -40,7 +40,7 @@ class YouTubeTranscriptSummarizer:
 
         print("[INIT] Setting up OpenAI client...")
         self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
-        self.model = get_config("api.openai.model", "gpt-5")
+        self.model = get_config("api.openai.model", "gpt-4o-mini")
         self.timeout = get_config("api.openai.timeout", 120)
 
         print("[INIT] Loading prompt template...")

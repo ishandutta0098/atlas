@@ -87,14 +87,20 @@ class AcademicPapersRAG:
 
     def _configure_settings(self):
         """Configure LlamaIndex global settings."""
+        from src.utils import get_config
+
         # Set up embeddings
+        embedding_model = get_config(
+            "api.openai.embedding_model", "text-embedding-3-small"
+        )
         Settings.embed_model = OpenAIEmbedding(
-            model="text-embedding-3-small", api_key=os.getenv("OPENAI_API_KEY")
+            model=embedding_model, api_key=os.getenv("OPENAI_API_KEY")
         )
 
         # Set up LLM
+        model = get_config("api.openai.model", "gpt-4o-mini")
         Settings.llm = OpenAI(
-            model="gpt-5-mini",
+            model=model,
             api_key=os.getenv("OPENAI_API_KEY"),
         )
 

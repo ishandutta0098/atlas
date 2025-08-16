@@ -17,6 +17,40 @@ from src.utils import get_config, setup_logging
 load_dotenv()
 
 
+def parse_duration(iso_duration):
+    """
+    Parse ISO 8601 duration format (PT4M13S) to human-readable format (4:13).
+
+    Args:
+        iso_duration (str): ISO 8601 duration string (e.g., "PT4M13S")
+
+    Returns:
+        str: Human-readable duration (e.g., "4:13")
+    """
+    import re
+
+    if not iso_duration:
+        return "Unknown"
+
+    # Parse ISO 8601 duration format
+    pattern = r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"
+    match = re.match(pattern, iso_duration)
+
+    if not match:
+        return "Unknown"
+
+    hours, minutes, seconds = match.groups()
+    hours = int(hours) if hours else 0
+    minutes = int(minutes) if minutes else 0
+    seconds = int(seconds) if seconds else 0
+
+    # Format duration
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    else:
+        return f"{minutes}:{seconds:02d}"
+
+
 def search_youtube_videos_api(search_query, max_results=None):
     """
     Search for YouTube videos using the YouTube Data API.
@@ -64,7 +98,10 @@ def search_youtube_videos_api(search_query, max_results=None):
         socket.setdefaulttimeout(timeout)
         search_response = search_request.execute()
 
-        videos = []
+        # Extract video IDs from search results
+        video_ids = []
+        videos_data = []
+
         for search_result in search_response.get("items", []):
             # Handle different types of search results (videos vs playlists/channels)
             if "id" in search_result:
@@ -81,9 +118,35 @@ def search_youtube_videos_api(search_query, max_results=None):
             else:
                 continue
 
+            video_ids.append(video_id)
+            videos_data.append(search_result)
+
+        # Get detailed video information including duration
+        videos = []
+        if video_ids:
+            # Make a second API call to get video details including duration
+            video_details_request = youtube.videos().list(
+                part="contentDetails,statistics", id=",".join(video_ids)
+            )
+            video_details_response = video_details_request.execute()
+
+            # Create a mapping of video_id to details
+            video_details_map = {}
+            for video_detail in video_details_response.get("items", []):
+                video_details_map[video_detail["id"]] = video_detail
+
+        for i, search_result in enumerate(videos_data):
+            video_id = video_ids[i]
+
             # Get description max length from config
             description_max_length = get_config("search.description_max_length", 200)
             description = search_result["snippet"]["description"]
+
+            # Get duration from video details
+            duration = "Unknown"
+            if video_id in video_details_map:
+                duration_iso = video_details_map[video_id]["contentDetails"]["duration"]
+                duration = parse_duration(duration_iso)
 
             video_info = {
                 "title": search_result["snippet"]["title"],
@@ -96,6 +159,7 @@ def search_youtube_videos_api(search_query, max_results=None):
                 ),
                 "published_at": search_result["snippet"]["publishedAt"],
                 "video_id": video_id,
+                "duration": duration,
             }
             videos.append(video_info)
 

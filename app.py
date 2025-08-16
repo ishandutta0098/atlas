@@ -419,6 +419,153 @@ def step5_generate_assignments(
         return f"❌ Assignment Generation Error: {str(e)}"
 
 
+# Global RAG system instance for caching
+_rag_system = None
+
+
+def get_rag_system():
+    """Get or initialize the RAG system (cached globally)."""
+    global _rag_system
+
+    if _rag_system is None:
+        # Import the RAG system
+        import os
+        import sys
+
+        sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+        from papers_rag import AcademicPapersRAG
+
+        # Initialize the RAG system
+        _rag_system = AcademicPapersRAG(
+            papers_folder="papers/agents",
+            chunk_size=512,
+            chunk_overlap=50,
+            similarity_top_k=5,
+        )
+
+        # Initialize the system (this will use existing index if available)
+        if not _rag_system.initialize_system(force_rebuild=False):
+            print("[RAG] Failed to initialize RAG system")
+            _rag_system = None
+            return None
+
+        print("[RAG] RAG system initialized successfully")
+
+    return _rag_system
+
+
+def query_papers_rag(query: str, progress: gr.Progress = gr.Progress()) -> str:
+    """
+    Query the papers RAG database.
+
+    Args:
+        query: The search query for papers
+
+    Returns:
+        str: Formatted RAG search results with paper citations
+    """
+    try:
+        if not query or not query.strip():
+            return "❌ Please provide a query to search the papers database."
+
+        progress(0.1, desc="🔍 Initializing RAG system...")
+
+        # Get the cached RAG system
+        rag = get_rag_system()
+        if rag is None:
+            return "❌ Failed to initialize RAG system. Please ensure papers are available in the 'papers/agents' folder and the vector database is set up."
+
+        progress(0.5, desc="🔍 Searching papers...")
+
+        # Perform the search
+        result = rag.search_papers(query, include_metadata=True)
+
+        if not result["success"]:
+            return f"❌ Search failed: {result.get('error', 'Unknown error')}"
+
+        progress(1.0, desc="✅ Search completed!")
+
+        # Format the results
+        return format_rag_results(result)
+
+    except Exception as e:
+        print(f"[ERROR] RAG query failed: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
+        return f"❌ RAG Query Error: {str(e)}"
+
+
+def format_rag_results(result: Dict) -> str:
+    """Format the RAG search results with paper citations."""
+    if not result["success"]:
+        return f"❌ Search failed: {result.get('error', 'Unknown error')}"
+
+    response = result["response"]
+    sources = result["sources"]
+    query = result["query"]
+    search_time = result["search_time"]
+
+    # Format the output
+    formatted_result = f"🔍 **Query:** {query}\n\n"
+    formatted_result += f"🤖 **AI Response:**\n\n{response}\n\n"
+    formatted_result += "---\n\n"
+    formatted_result += (
+        f"📚 **Sources & Citations** ({len(sources)} papers referenced):\n\n"
+    )
+
+    # Group sources by paper
+    papers_cited = {}
+    for i, source in enumerate(sources, 1):
+        file_name = source.get("file_name", "Unknown")
+        title = source.get("title", "Unknown Title")
+        authors = source.get("authors", "Unknown Authors")
+        score = source.get("score", 0.0)
+        text_excerpt = source.get("text", "")
+
+        if file_name not in papers_cited:
+            papers_cited[file_name] = {
+                "title": title,
+                "authors": authors,
+                "excerpts": [],
+                "max_score": score,
+            }
+        else:
+            papers_cited[file_name]["max_score"] = max(
+                papers_cited[file_name]["max_score"], score
+            )
+
+        papers_cited[file_name]["excerpts"].append(
+            {"text": text_excerpt, "score": score}
+        )
+
+    # Display papers with their citations
+    for i, (file_name, paper_info) in enumerate(papers_cited.items(), 1):
+        formatted_result += f"### {i}. {paper_info['title']}\n"
+        formatted_result += f"**Authors:** {paper_info['authors']}\n"
+        formatted_result += f"**File:** `{file_name}.pdf`\n"
+        formatted_result += f"**Relevance Score:** {paper_info['max_score']:.3f}\n\n"
+
+        # Show relevant excerpts
+        formatted_result += f"**Relevant Excerpts:**\n"
+        for j, excerpt in enumerate(paper_info["excerpts"], 1):
+            excerpt_text = excerpt["text"]
+            if len(excerpt_text) > 300:
+                excerpt_text = excerpt_text[:300] + "..."
+            formatted_result += f"- *{excerpt_text}* (Score: {excerpt['score']:.3f})\n"
+
+        formatted_result += "\n---\n\n"
+
+    # Add search statistics
+    formatted_result += f"## 📊 Search Statistics\n\n"
+    formatted_result += f"- **Papers Found:** {len(papers_cited)}\n"
+    formatted_result += f"- **Total Sources:** {len(sources)}\n"
+    formatted_result += f"- **Search Time:** {search_time:.2f} seconds\n"
+    formatted_result += f"- **Query:** {query}\n\n"
+
+    return formatted_result
+
+
 def format_assignments_results(
     assignment_results: Dict[str, bool],
     video_metadata: Dict[str, Dict],
@@ -786,8 +933,8 @@ def generate_comparison_table_with_script(pipeline_output_folder: str) -> str:
             return "❌ No data available for comparison."
 
         # Convert DataFrame to HTML table with proper styling
-        html_result = f"# 📊 Video Comparison Analysis\n\n"
-        html_result += f"**Comparing {len(comparison_df)} videos:**\n\n"
+        html_result = f'<h1 style="color: #000000; text-align: center; margin-bottom: 20px;">📊 Video Comparison Analysis</h1>\n\n'
+        html_result += f'<p style="color: #000000; text-align: center; font-weight: bold; margin-bottom: 20px;">Comparing {len(comparison_df)} videos:</p>\n\n'
 
         # Create HTML table with improved formatting and column widths
         html_result += '<div style="overflow-x: auto; background-color: #ffffff; padding: 15px; border-radius: 8px; border: 2px solid #333333; margin: 10px 0; max-width: 100%;">\n'
@@ -873,6 +1020,54 @@ def generate_comparison_table_with_script(pipeline_output_folder: str) -> str:
 
                 # Style categorical columns with colors
                 if col in ["Difficulty", "Content Depth", "Teaching Style"]:
+                    # Clean up categorical values to show only the main category
+                    if col == "Content Depth":
+                        # Extract just the category from longer descriptions
+                        if "surface" in value.lower():
+                            value = "Surface-level"
+                        elif "moderate" in value.lower():
+                            value = "Moderate"
+                        elif "deep" in value.lower():
+                            value = "Deep-dive"
+                        elif ":" in value:
+                            value = value.split(":")[0].strip()
+                        elif "-" in value and len(value) > 15:
+                            value = value.split("-")[0].strip()
+
+                    elif col == "Difficulty":
+                        # Clean up difficulty values
+                        if "beginner" in value.lower():
+                            value = "Beginner"
+                        elif "intermediate" in value.lower():
+                            value = "Intermediate"
+                        elif "advanced" in value.lower():
+                            value = "Advanced"
+                        elif " " in value:
+                            # Handle cases like "Intermediate Advanced" - take first word
+                            value = value.split()[0].strip()
+                        elif ":" in value:
+                            value = value.split(":")[0].strip()
+                        elif "-" in value and len(value) > 15:
+                            value = value.split("-")[0].strip()
+
+                    elif col == "Teaching Style":
+                        # Clean up teaching style values
+                        value_lower = value.lower()
+                        if "code-along" in value_lower or "code along" in value_lower:
+                            value = "Code-along"
+                        elif "explanation" in value_lower:
+                            value = "Explanation-heavy"
+                        elif "project" in value_lower:
+                            value = "Project-based"
+                        elif "theory" in value_lower:
+                            value = "Theory-focused"
+                        elif "mixed" in value_lower:
+                            value = "Mixed"
+                        elif ":" in value:
+                            value = value.split(":")[0].strip()
+                        elif "-" in value and len(value) > 15:
+                            value = value.split("-")[0].strip()
+
                     color_map = {
                         # Difficulty levels
                         "Beginner": "#28a745",
@@ -892,12 +1087,12 @@ def generate_comparison_table_with_script(pipeline_output_folder: str) -> str:
                         "Unknown": "#6c757d",
                     }
                     bg_color = color_map.get(value, "#6c757d")
-                    html_result += f'<td style="padding: 10px; border: 1px solid #333333; text-align: center; background-color: {row_color}; vertical-align: middle;">\n'
-                    html_result += f'<span style="background-color: {bg_color}; color: #ffffff; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; white-space: nowrap;">{value}</span>\n'
+                    html_result += f'<td style="padding: 12px; border: 1px solid #333333; text-align: center; background-color: {row_color}; vertical-align: middle; min-width: 80px;">\n'
+                    html_result += f'<span style="background-color: {bg_color}; color: #ffffff; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; white-space: nowrap; display: inline-block;">{value}</span>\n'
                     html_result += f"</td>\n"
                 elif col in ["Tools Count", "Complexity Score"]:
                     # Special styling for numeric columns
-                    html_result += f'<td style="padding: 10px; border: 1px solid #333333; text-align: center; background-color: {row_color}; font-weight: bold; color: #2c5282; font-size: 14px; vertical-align: middle;">{value}</td>\n'
+                    html_result += f'<td style="padding: 12px; border: 1px solid #333333; text-align: center; background-color: {row_color}; font-weight: bold; color: #2c5282; font-size: 14px; vertical-align: middle; min-width: 60px;">{value}</td>\n'
                 elif col in [
                     "Title",
                     "Learning Outcome",
@@ -905,10 +1100,10 @@ def generate_comparison_table_with_script(pipeline_output_folder: str) -> str:
                     "Key Technologies",
                 ]:
                     # Text columns with word wrapping
-                    html_result += f'<td style="padding: 10px; border: 1px solid #333333; color: {text_color}; vertical-align: top; background-color: {row_color}; font-size: 12px; line-height: 1.4; word-wrap: break-word; overflow-wrap: break-word;">{value}</td>\n'
+                    html_result += f'<td style="padding: 12px; border: 1px solid #333333; color: {text_color}; vertical-align: top; background-color: {row_color}; font-size: 12px; line-height: 1.4; word-wrap: break-word; overflow-wrap: break-word;">{value}</td>\n'
                 else:
                     # Other columns with standard formatting
-                    html_result += f'<td style="padding: 10px; border: 1px solid #333333; color: {text_color}; vertical-align: middle; background-color: {row_color}; font-size: 12px; text-align: center;">{value}</td>\n'
+                    html_result += f'<td style="padding: 12px; border: 1px solid #333333; color: {text_color}; vertical-align: middle; background-color: {row_color}; font-size: 12px; text-align: center;">{value}</td>\n'
 
             html_result += "</tr>\n"
 
@@ -1094,117 +1289,93 @@ def create_gradio_app():
                 """
                 )
 
-        with gr.Row(equal_height=False):
-            # Left Column - Input Configuration
-            with gr.Column(scale=1, elem_classes=["input-section"]):
-                gr.HTML('<h3 class="section-header">🔍 Search Configuration</h3>')
+        # Input Configuration Section
+        with gr.Column(elem_classes=["input-section"]):
+            gr.HTML('<h3 class="section-header">🔍 Search Configuration</h3>')
 
-                search_query = gr.Textbox(
-                    label="YouTube Search Query",
-                    placeholder="e.g., 'Python machine learning tutorial', 'React best practices', 'Docker deployment guide'",
-                    lines=3,
-                    info="Enter your search query to find relevant YouTube videos",
+            search_query = gr.Textbox(
+                label="YouTube Search Query",
+                placeholder="e.g., 'Python machine learning tutorial', 'React best practices', 'Docker deployment guide'",
+                lines=3,
+                info="Enter your search query to find relevant YouTube videos",
+            )
+
+            with gr.Row():
+                max_videos = gr.Slider(
+                    minimum=1,
+                    maximum=10,
+                    value=2,
+                    step=1,
+                    label="Max Videos",
+                    info="Maximum number of videos to process",
                 )
 
-                with gr.Row():
-                    max_videos = gr.Slider(
-                        minimum=1,
-                        maximum=10,
-                        value=3,
-                        step=1,
-                        label="Max Videos",
-                        info="Maximum number of videos to process",
-                    )
-
-                    num_workers = gr.Slider(
-                        minimum=1,
-                        maximum=8,
-                        value=2,
-                        step=1,
-                        label="Concurrent Workers",
-                        info="Number of parallel workers for processing",
-                    )
-
-                transcript_language = gr.Dropdown(
-                    choices=[
-                        "en",
-                        "es",
-                        "fr",
-                        "de",
-                        "it",
-                        "pt",
-                        "ru",
-                        "ja",
-                        "ko",
-                        "zh",
-                    ],
-                    value="en",
-                    label="Transcript Language",
-                    info="Language code for subtitle extraction",
+                num_workers = gr.Slider(
+                    minimum=1,
+                    maximum=8,
+                    value=2,
+                    step=1,
+                    label="Concurrent Workers",
+                    info="Number of parallel workers for processing",
                 )
 
-                gr.HTML('<h3 class="section-header">🔑 API Configuration</h3>')
+            transcript_language = gr.Dropdown(
+                choices=[
+                    "en",
+                    "es",
+                    "fr",
+                    "de",
+                    "it",
+                    "pt",
+                    "ru",
+                    "ja",
+                    "ko",
+                    "zh",
+                ],
+                value="en",
+                label="Transcript Language",
+                info="Language code for subtitle extraction",
+            )
 
-                use_env_keys = gr.Checkbox(
-                    value=True,
-                    label="Use Environment Variables for API Keys",
-                    info="Check if you have OPENAI_API_KEY and YOUTUBE_API_KEY set as environment variables",
+            gr.HTML('<h3 class="section-header">🔑 API Configuration</h3>')
+
+            use_env_keys = gr.Checkbox(
+                value=True,
+                label="Use Environment Variables for API Keys",
+                info="Check if you have OPENAI_API_KEY and YOUTUBE_API_KEY set as environment variables",
+            )
+
+            with gr.Column(visible=False) as api_key_inputs:
+                openai_api_key = gr.Textbox(
+                    label="OpenAI API Key",
+                    type="password",
+                    placeholder="sk-...",
+                    info="Required for transcript summarization",
                 )
 
-                with gr.Column(visible=False) as api_key_inputs:
-                    openai_api_key = gr.Textbox(
-                        label="OpenAI API Key",
-                        type="password",
-                        placeholder="sk-...",
-                        info="Required for transcript summarization",
-                    )
-
-                    youtube_api_key = gr.Textbox(
-                        label="YouTube Data API Key",
-                        type="password",
-                        placeholder="AIza...",
-                        info="Required for video search",
-                    )
-
-                # Show/hide API key inputs based on checkbox
-                def toggle_api_inputs(use_env):
-                    return gr.update(visible=not use_env)
-
-                use_env_keys.change(
-                    fn=toggle_api_inputs,
-                    inputs=[use_env_keys],
-                    outputs=[api_key_inputs],
+                youtube_api_key = gr.Textbox(
+                    label="YouTube Data API Key",
+                    type="password",
+                    placeholder="AIza...",
+                    info="Required for video search",
                 )
 
-                process_btn = gr.Button(
-                    "🚀 Start Pipeline",
-                    variant="primary",
-                    size="lg",
-                    elem_classes=["primary-button"],
-                )
+            # Show/hide API key inputs based on checkbox
+            def toggle_api_inputs(use_env):
+                return gr.update(visible=not use_env)
 
-            # Right Column - Start Pipeline Button
-            with gr.Column(scale=1, elem_classes=["results-section"]):
-                gr.HTML('<h3 class="section-header">🚀 Ready to Start</h3>')
+            use_env_keys.change(
+                fn=toggle_api_inputs,
+                inputs=[use_env_keys],
+                outputs=[api_key_inputs],
+            )
 
-                gr.Markdown(
-                    """
-                **Pipeline Steps:**
-                1. 🔍 Search YouTube videos
-                2. 📝 Fetch video transcripts  
-                3. 🤖 Generate AI summaries
-                4. 📊 Create comparison analysis
-                5. 📝 Generate educational assignments
-                
-                **Sequential Execution:** Each step runs independently with its own progress bar!
-                
-                ✨ **Key Benefits:**
-                - No progress bar duplication
-                - Completed outputs remain visible
-                - Clear step-by-step progression
-                - Individual progress tracking per step
-                """
-                )
+            process_btn = gr.Button(
+                "🚀 Start Pipeline",
+                variant="primary",
+                size="lg",
+                elem_classes=["primary-button"],
+            )
 
         # Pipeline Results - Real-time output blocks in single column
         gr.HTML(
@@ -1257,6 +1428,61 @@ def create_gradio_app():
             interactive=False,
         )
 
+        # RAG Query Section
+        gr.HTML(
+            '<h2 style="text-align: center; color: #667eea; margin: 30px 0 20px 0;">📚 Academic Papers RAG Query</h2>'
+        )
+
+        with gr.Row():
+            # RAG Query Input
+            with gr.Column(scale=2):
+                rag_query_input = gr.Textbox(
+                    label="🔍 Query Academic Papers",
+                    placeholder="e.g., 'What are the main types of AI agents?', 'How do LLM agents work?', 'What are the challenges in autonomous agents?'",
+                    lines=3,
+                    info="Search through indexed academic papers using natural language queries",
+                )
+
+                rag_query_btn = gr.Button(
+                    "🔍 Search Papers",
+                    variant="secondary",
+                    size="lg",
+                )
+
+            # RAG Instructions
+            with gr.Column(scale=1):
+                gr.HTML(
+                    """
+                    <div style="color: #000000 !important; background-color: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                        <h4 style="color: #000000 !important; margin-bottom: 10px; font-weight: bold;">🎯 RAG Query Features:</h4>
+                        <ul style="color: #000000 !important; margin-bottom: 15px; padding-left: 20px;">
+                            <li style="color: #000000 !important; margin-bottom: 5px;">Search through academic papers using natural language</li>
+                            <li style="color: #000000 !important; margin-bottom: 5px;">Get AI-generated answers with paper citations</li>
+                            <li style="color: #000000 !important; margin-bottom: 5px;">View relevant excerpts from source papers</li>
+                            <li style="color: #000000 !important; margin-bottom: 5px;">See relevance scores for each source</li>
+                        </ul>
+                        
+                        <h4 style="color: #000000 !important; margin-bottom: 10px; font-weight: bold;">📖 Example Queries:</h4>
+                        <ul style="color: #000000 !important; padding-left: 20px;">
+                            <li style="color: #000000 !important; margin-bottom: 5px;">"What are the main architectures for AI agents?"</li>
+                            <li style="color: #000000 !important; margin-bottom: 5px;">"How do LLM-based agents handle planning?"</li>
+                            <li style="color: #000000 !important; margin-bottom: 5px;">"What evaluation methods exist for autonomous agents?"</li>
+                            <li style="color: #000000 !important; margin-bottom: 5px;">"What are the current limitations of AI agents?"</li>
+                        </ul>
+                    </div>
+                    """
+                )
+
+        # RAG Results
+        rag_results = gr.Textbox(
+            label="📚 Academic Papers Search Results",
+            lines=10,
+            max_lines=20,
+            show_copy_button=True,
+            info="AI-generated answers with paper citations and source excerpts",
+            interactive=False,
+        )
+
         # Sequential pipeline execution using .then() method
         # Step 1: Search for videos
         step1_event = process_btn.click(
@@ -1304,6 +1530,14 @@ def create_gradio_app():
             inputs=comparison_table,  # Pass the comparison results as input (for chaining)
             outputs=assignments_output,
             show_progress="full",  # Show progress only for this output
+        )
+
+        # RAG Query button click event
+        rag_query_btn.click(
+            fn=query_papers_rag,
+            inputs=rag_query_input,
+            outputs=rag_results,
+            show_progress="full",
         )
 
     return app

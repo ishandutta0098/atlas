@@ -99,6 +99,7 @@ pipeline_state = {
     "transcripts_output": "",
     "summaries_output": "",
     "comparison_table": "",
+    "assignments_output": "",
 }
 
 
@@ -129,6 +130,7 @@ def step1_search_videos(
             "transcripts_output": "",
             "summaries_output": "",
             "comparison_table": "",
+            "assignments_output": "",
         }
 
         # Validate inputs
@@ -328,6 +330,190 @@ def step4_generate_comparison(
 
         traceback.print_exc()
         return f"❌ Comparison Table Error: {str(e)}"
+
+
+def step5_generate_assignments(
+    comparison_input: str, progress: gr.Progress = gr.Progress()
+) -> str:
+    """
+    Step 5: Generate educational assignments.
+
+    Args:
+        comparison_input: Previous step output (not used, just for chaining)
+
+    Returns:
+        str: Formatted assignments results
+    """
+    try:
+        global pipeline_state
+
+        # Check if we have valid state from previous steps
+        if not pipeline_state["pipeline"]:
+            return "❌ Error: No valid pipeline state. Please run previous steps first."
+
+        pipeline = pipeline_state["pipeline"]
+
+        # Generate assignments with progress tracking
+        progress(0.1, desc="📝 Initializing assignment generator...")
+
+        # Import the assignment generator
+        import os
+        import sys
+
+        sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+        from assignment_generator import YouTubeAssignmentGenerator
+
+        # Get the current pipeline state to use the same worker configuration
+        num_workers = 2  # Default fallback value
+
+        # Use the same number of workers as configured in the pipeline for consistency
+        if pipeline_state.get("pipeline") and hasattr(
+            pipeline_state["pipeline"], "num_workers"
+        ):
+            num_workers = max(
+                pipeline_state["pipeline"].num_workers, 2
+            )  # Minimum 2 workers
+
+        progress(0.3, desc="🤖 Running parallel assignment generation...")
+
+        # Initialize the assignment generator
+        generator = YouTubeAssignmentGenerator(
+            pipeline_output_folder=pipeline.output_folder, num_workers=num_workers
+        )
+
+        progress(0.5, desc="📊 Loading video data and summaries...")
+
+        # Load necessary data
+        video_metadata = generator.load_video_metadata()
+        summary_data = generator.load_summary_data()
+
+        if not summary_data:
+            assignments_output = "❌ No summaries available for assignment generation."
+            pipeline_state["assignments_output"] = assignments_output
+            return assignments_output
+
+        progress(0.7, desc="🚀 Generating assignments in parallel...")
+
+        # Generate assignments
+        assignment_results = generator.generate_assignments(
+            video_metadata, summary_data
+        )
+
+        # Format the results for display
+        assignments_output = format_assignments_results(
+            assignment_results,
+            video_metadata,
+            summary_data,
+            generator.assignments_folder,
+        )
+        pipeline_state["assignments_output"] = assignments_output
+
+        progress(1.0, desc="✅ Assignment generation completed!")
+        return assignments_output
+
+    except Exception as e:
+        print(f"[ERROR] Assignment generation failed: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
+        return f"❌ Assignment Generation Error: {str(e)}"
+
+
+def format_assignments_results(
+    assignment_results: Dict[str, bool],
+    video_metadata: Dict[str, Dict],
+    summary_data: Dict[str, Dict],
+    assignments_folder: Path,
+) -> str:
+    """Format the assignment generation results."""
+    if not assignment_results:
+        return "❌ No assignments were generated."
+
+    successful_count = sum(assignment_results.values())
+    total_count = len(assignment_results)
+
+    result = f"📝 **Educational Assignments Generated** ({successful_count}/{total_count} completed)\n\n"
+    result += f"📁 **Assignments saved to:** `{assignments_folder}`\n\n"
+
+    for i, (video_id, success) in enumerate(assignment_results.items(), 1):
+        video_info = video_metadata.get(video_id, {})
+        title = video_info.get("title", "Unknown Title")
+        channel = video_info.get("channel", "Unknown Channel")
+        url = video_info.get("url", "#")
+
+        result += f"## {i}. {title}\n"
+        result += f"**Channel:** {channel}\n"
+        result += f"**URL:** {url}\n\n"
+
+        if success:
+            assignment_file = f"{video_id}_assignment.md"
+            assignment_path = assignments_folder / assignment_file
+
+            if assignment_path.exists():
+                # Read and display the full assignment content
+                try:
+                    with open(assignment_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+
+                    # Extract the actual assignment content (skip metadata)
+                    lines = content.split("\n")
+                    assignment_content = []
+                    in_metadata = False
+                    metadata_blocks = 0
+
+                    for line in lines:
+                        if line.strip() == "---":
+                            if not in_metadata:
+                                in_metadata = True
+                                metadata_blocks += 1
+                            else:
+                                in_metadata = False
+                                metadata_blocks += 1
+                                if metadata_blocks >= 2:  # Skip the metadata block
+                                    continue
+                        elif not in_metadata and metadata_blocks >= 2:
+                            assignment_content.append(line)
+
+                    # Join the assignment content and clean it up
+                    full_assignment = "\n".join(assignment_content).strip()
+
+                    result += f"✅ **Assignment Generated Successfully**\n\n"
+                    result += f"### 📝 Full Assignment Content:\n\n"
+                    result += full_assignment + "\n\n"
+
+                except Exception as e:
+                    result += f"✅ **Assignment Generated** - `{assignment_file}`\n"
+                    result += f"⚠️ Error reading assignment content: {str(e)}\n\n"
+            else:
+                result += f"✅ **Assignment Generated** - `{assignment_file}`\n\n"
+        else:
+            result += f"❌ **Assignment Generation Failed**\n"
+            result += f"Please check the logs for error details.\n\n"
+
+        result += "---\n\n"
+
+    # Add summary statistics
+    result += f"## 📊 Generation Summary\n\n"
+    result += f"- **Total Videos:** {total_count}\n"
+    result += f"- **Successful Assignments:** {successful_count}\n"
+    result += f"- **Success Rate:** {successful_count/total_count*100:.1f}%\n"
+    result += f"- **Output Folder:** `{assignments_folder}`\n\n"
+
+    result += f"### 🎯 Assignment Features\n\n"
+    result += f"Each assignment includes:\n"
+    result += (
+        f"- **📋 Assignment Overview** - Clear learning objectives and deliverables\n"
+    )
+    result += f"- **📚 Prerequisite Knowledge** - Required background and skills\n"
+    result += f"- **🔧 Core Tasks** - Progressive, hands-on implementation tasks\n"
+    result += f"- **💡 Practical Exercises** - Real-world problem-solving scenarios\n"
+    result += (
+        f"- **🚀 Advanced Challenges** - Extension activities for deeper learning\n"
+    )
+    result += f"- **✅ Assessment Criteria** - Clear success metrics and rubrics\n"
+    result += f"- **📖 Resources & References** - Additional learning materials\n\n"
+
+    return result
 
 
 def format_transcript_results(
@@ -1008,6 +1194,7 @@ def create_gradio_app():
                 2. 📝 Fetch video transcripts  
                 3. 🤖 Generate AI summaries
                 4. 📊 Create comparison analysis
+                5. 📝 Generate educational assignments
                 
                 **Sequential Execution:** Each step runs independently with its own progress bar!
                 
@@ -1061,6 +1248,15 @@ def create_gradio_app():
             visible=True,
         )
 
+        assignments_output = gr.Textbox(
+            label="📝 5. Educational Assignments",
+            lines=8,
+            max_lines=15,
+            show_copy_button=True,
+            info="AI-generated educational assignments for hands-on learning",
+            interactive=False,
+        )
+
         # Sequential pipeline execution using .then() method
         # Step 1: Search for videos
         step1_event = process_btn.click(
@@ -1099,6 +1295,14 @@ def create_gradio_app():
             fn=step4_generate_comparison,
             inputs=summaries_output,  # Pass the summaries results as input (for chaining)
             outputs=comparison_table,
+            show_progress="full",  # Show progress only for this output
+        )
+
+        # Step 5: Generate assignments (triggered after step 4 completes)
+        step5_event = step4_event.then(
+            fn=step5_generate_assignments,
+            inputs=comparison_table,  # Pass the comparison results as input (for chaining)
+            outputs=assignments_output,
             show_progress="full",  # Show progress only for this output
         )
 

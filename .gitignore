@@ -79,4 +79,6 @@ temp*
 *.pdf
 *output*
 storage
+data
+tutorial*
 # End of Selection

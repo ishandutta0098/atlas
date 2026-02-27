@@ -4,7 +4,7 @@
 # API Configuration
 api:
   openai:
-    model: "gpt-5-mini"
+    model: "openai/gpt-5-mini"
     embedding_model: "text-embedding-3-small"
     timeout: 180  # seconds
     max_retries: 3
@@ -74,5 +74,5 @@ search:
   
 # Environment variables (defaults, can be overridden by actual env vars)
 environment:
-  openai_api_key_env: "OPENAI_API_KEY"
+  openrouter_api_key_env: "OPENROUTER_API_KEY"
   youtube_api_key_env: "YOUTUBE_API_KEY"

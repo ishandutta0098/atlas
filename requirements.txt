@@ -7,5 +7,11 @@ pandas
 tabulate
 openpyxl
 gradio
-yt-dlp
+yt-dlp>=2025.9.26
+curl-cffi
 pyyaml
+llama-index
+llama-index-llms-openai
+sentence-transformers
+llama-index-llms-openrouter
+llama-index-embeddings-huggingface

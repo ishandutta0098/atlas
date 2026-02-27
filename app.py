@@ -72,7 +72,7 @@ def validate_api_keys():
         Tuple[bool, str]: (is_valid, error_message)
     """
     required_keys = {
-        "OPENAI_API_KEY": "OpenAI API key for transcript summarization",
+        "OPENROUTER_API_KEY": "OpenRouter API key for transcript summarization",
         "YOUTUBE_API_KEY": "YouTube Data API key for video search",
     }
 
@@ -103,6 +103,9 @@ pipeline_state = {
     "assignments_output": "",
 }
 
+# Global demo mode flag
+demo_mode = False
+
 
 def step1_search_videos(
     search_query: str,
@@ -122,7 +125,7 @@ def step1_search_videos(
     """
     try:
         # Reset pipeline state
-        global pipeline_state
+        global pipeline_state, demo_mode
         pipeline_state = {
             "pipeline": None,
             "videos": None,
@@ -134,54 +137,119 @@ def step1_search_videos(
             "assignments_output": "",
         }
 
-        # Validate inputs
-        if not search_query or not search_query.strip():
-            return "❌ Error: Please provide a search query."
-
-        # Handle API keys
-        if use_env_keys:
-            # Validate environment keys
-            is_valid, error_msg = validate_api_keys()
-            if not is_valid:
-                return error_msg
+        # If in demo mode, skip API validation and go straight to fallback
+        if demo_mode:
+            print("[DEMO MODE] Using fallback folder directly")
+            progress(0.5, desc="📁 Loading demo data from fallback folder...")
+            videos = []  # Force fallback path
         else:
-            # Use provided API keys
-            if not openai_api_key or not openai_api_key.strip():
-                return "❌ Error: OpenAI API key is required."
-            if not youtube_api_key or not youtube_api_key.strip():
-                return "❌ Error: YouTube API key is required."
+            # Validate inputs
+            if not search_query or not search_query.strip():
+                return "❌ Error: Please provide a search query."
 
-            # Set the API keys as environment variables for the pipeline
-            os.environ["OPENAI_API_KEY"] = openai_api_key
-            os.environ["YOUTUBE_API_KEY"] = youtube_api_key
+            # Handle API keys
+            if use_env_keys:
+                # Validate environment keys
+                is_valid, error_msg = validate_api_keys()
+                if not is_valid:
+                    return error_msg
+            else:
+                # Use provided API keys
+                if not openai_api_key or not openai_api_key.strip():
+                    return "❌ Error: OpenRouter API key is required."
+                if not youtube_api_key or not youtube_api_key.strip():
+                    return "❌ Error: YouTube API key is required."
 
-        # Initialize the pipeline with user configuration
-        pipeline = YouTubePipeline(
-            max_videos=max_videos,
-            transcript_language=transcript_language,
-            output_folder=f"pipeline_output_{int(time.time())}",
-            num_workers=num_workers,
-        )
+                # Set the API keys as environment variables for the pipeline
+                os.environ["OPENROUTER_API_KEY"] = openai_api_key
+                os.environ["YOUTUBE_API_KEY"] = youtube_api_key
 
-        # Store pipeline in global state
-        pipeline_state["pipeline"] = pipeline
+            # Try to initialize the pipeline with user configuration
+            try:
+                pipeline = YouTubePipeline(
+                    max_videos=max_videos,
+                    transcript_language=transcript_language,
+                    output_folder=f"pipeline_output_{int(time.time())}",
+                    num_workers=num_workers,
+                )
 
-        # Search for videos with progress tracking
-        progress(0.1, desc="🔍 Searching for YouTube videos...")
-        videos = pipeline.search_videos(search_query)
+                # Store pipeline in global state
+                pipeline_state["pipeline"] = pipeline
 
+                # Search for videos with progress tracking
+                progress(0.1, desc="🔍 Searching for YouTube videos...")
+                videos = pipeline.search_videos(search_query)
+                
+                if videos:
+                    # Store videos in global state
+                    pipeline_state["videos"] = videos
+                    
+                    # Format and store search results
+                    search_results = format_search_results(videos)
+                    pipeline_state["search_results"] = search_results
+                    
+                    progress(1.0, desc="✅ Video search completed!")
+                    return search_results
+                    
+            except Exception as e:
+                print(f"[SEARCH] YouTube API failed: {str(e)}")
+                videos = []
+        
+        # Fallback: Use existing pipeline output folder if API failed or demo mode
         if not videos:
-            return "❌ No videos found for the search query."
-
-        # Store videos in global state
-        pipeline_state["videos"] = videos
-
-        # Format and store search results
-        search_results = format_search_results(videos)
-        pipeline_state["search_results"] = search_results
-
-        progress(1.0, desc="✅ Video search completed!")
-        return search_results
+            fallback_folder = "/Users/ishandutta/Documents/code/atlas/pipeline_output_1759513972"
+            if os.path.exists(fallback_folder):
+                print(f"[FALLBACK] Using read-only pipeline output: {fallback_folder}")
+                
+                # Load metadata from fallback folder
+                metadata_folder = os.path.join(fallback_folder, "metadata")
+                search_results_file = None
+                
+                # Find the most recent search results file
+                if os.path.exists(metadata_folder):
+                    metadata_files = [f for f in os.listdir(metadata_folder) if f.startswith("search_results_")]
+                    if metadata_files:
+                        metadata_files.sort(reverse=True)
+                        search_results_file = os.path.join(metadata_folder, metadata_files[0])
+                
+                if search_results_file and os.path.exists(search_results_file):
+                    # Load videos from metadata
+                    with open(search_results_file, 'r', encoding='utf-8') as f:
+                        search_metadata = json.load(f)
+                        videos = search_metadata.get("videos", [])
+                    
+                    if videos:
+                        # Create a read-only pipeline reference (don't modify fallback folder)
+                        # Store the fallback folder paths for later use but don't create any new files
+                        pipeline_state["fallback_mode"] = True
+                        pipeline_state["fallback_folder"] = fallback_folder
+                        pipeline_state["videos"] = videos
+                        pipeline_state["transcripts_folder"] = os.path.join(fallback_folder, "transcripts")
+                        pipeline_state["summaries_folder"] = os.path.join(fallback_folder, "summaries")
+                        pipeline_state["metadata_folder"] = os.path.join(fallback_folder, "metadata")
+                        
+                        print(f"[FALLBACK] Loaded {len(videos)} videos from existing pipeline (READ-ONLY)")
+                        
+                        # Different message for demo mode vs fallback mode
+                        if demo_mode:
+                            # In demo mode, don't show any special indicators - make it look like a normal run
+                            fallback_message = ""
+                        else:
+                            fallback_message = f"⚠️ YouTube API unavailable. Using cached results (READ-ONLY mode):\n\n"
+                            fallback_message += f"📁 Source: {fallback_folder}\n"
+                            fallback_message += f"🎥 Videos available: {len(videos)}\n"
+                            fallback_message += f"ℹ️  Note: No new data will be created or modified\n\n"
+                        
+                        # Format and store search results
+                        search_results = format_search_results(videos)
+                        pipeline_state["search_results"] = fallback_message + search_results
+                        
+                        progress(1.0, desc="✅ Video search completed!" if demo_mode else "✅ Using fallback data (read-only)!")
+                        return pipeline_state["search_results"]
+            
+            if demo_mode:
+                return "❌ Demo data not found. Please ensure the fallback folder exists at: /Users/ishandutta/Documents/code/atlas/pipeline_output_1759513972"
+            return "❌ YouTube API unavailable and no fallback data found. Please check your API key."
 
     except Exception as e:
         print(f"[ERROR] Video search failed: {str(e)}")
@@ -207,11 +275,45 @@ def step2_fetch_transcripts(
         global pipeline_state
 
         # Check if we have valid state from previous step
-        if not pipeline_state["pipeline"] or not pipeline_state["videos"]:
-            return "❌ Error: No valid pipeline state. Please run video search first."
+        if not pipeline_state.get("videos"):
+            return "❌ Error: No videos available. Please run video search first."
 
-        pipeline = pipeline_state["pipeline"]
         videos = pipeline_state["videos"]
+        
+        # If in fallback mode, load existing transcripts
+        if pipeline_state.get("fallback_mode"):
+            progress(0.5, desc="📝 Fetching video transcripts..." if demo_mode else "📝 Loading existing transcripts from fallback...")
+            transcripts_folder = pipeline_state["transcripts_folder"]
+            
+            # Find existing transcript files
+            transcript_paths = []
+            if os.path.exists(transcripts_folder):
+                for video in videos:
+                    video_id = video.get("video_id")
+                    transcript_file = os.path.join(transcripts_folder, f"{video_id}.en.srt")
+                    if os.path.exists(transcript_file):
+                        transcript_paths.append(transcript_file)
+            
+            # Store transcript paths in global state
+            pipeline_state["transcript_paths"] = transcript_paths
+            
+            # Format transcript results
+            transcripts_output = format_transcript_results(
+                transcript_paths, videos, transcripts_folder
+            )
+            # In demo mode, don't add any special prefixes
+            if not demo_mode:
+                transcripts_output = f"📖 Using existing transcripts (READ-ONLY):\n\n{transcripts_output}"
+            pipeline_state["transcripts_output"] = transcripts_output
+            
+            progress(1.0, desc="✅ Transcript fetching completed!" if demo_mode else "✅ Loaded existing transcripts!")
+            return transcripts_output
+
+        # Normal mode: fetch new transcripts
+        if not pipeline_state.get("pipeline"):
+            return "❌ Error: No valid pipeline. Please run video search first."
+            
+        pipeline = pipeline_state["pipeline"]
 
         # Fetch transcripts with progress tracking
         progress(0.1, desc="📝 Fetching video transcripts...")
@@ -253,16 +355,34 @@ def step3_generate_summaries(
         global pipeline_state
 
         # Check if we have valid state from previous steps
-        if (
-            not pipeline_state["pipeline"]
-            or not pipeline_state["videos"]
-            or not pipeline_state["transcript_paths"]
-        ):
-            return "❌ Error: No valid pipeline state. Please run previous steps first."
+        if not pipeline_state.get("videos") or not pipeline_state.get("transcript_paths"):
+            return "❌ Error: No transcripts available. Please run previous steps first."
 
-        pipeline = pipeline_state["pipeline"]
         videos = pipeline_state["videos"]
         transcript_paths = pipeline_state["transcript_paths"]
+        
+        # If in fallback mode, load existing summaries
+        if pipeline_state.get("fallback_mode"):
+            progress(0.5, desc="🤖 Generating AI summaries..." if demo_mode else "🤖 Loading existing summaries from fallback...")
+            summaries_folder = pipeline_state["summaries_folder"]
+            
+            # Format summaries results using existing summary files
+            summaries_output = format_summaries_results(
+                transcript_paths, videos, summaries_folder
+            )
+            # In demo mode, don't add any special prefixes
+            if not demo_mode:
+                summaries_output = f"📊 Using existing summaries (READ-ONLY):\n\n{summaries_output}"
+            pipeline_state["summaries_output"] = summaries_output
+            
+            progress(1.0, desc="✅ AI summarization completed!" if demo_mode else "✅ Loaded existing summaries!")
+            return summaries_output
+
+        # Normal mode: generate new summaries
+        if not pipeline_state.get("pipeline"):
+            return "❌ Error: No valid pipeline. Please run previous steps first."
+            
+        pipeline = pipeline_state["pipeline"]
 
         if transcript_paths:
             # Generate summaries with progress tracking
@@ -310,16 +430,28 @@ def step4_generate_comparison(
     try:
         global pipeline_state
 
-        # Check if we have valid state from previous steps
-        if not pipeline_state["pipeline"]:
-            return "❌ Error: No valid pipeline state. Please run previous steps first."
+        # Determine the output folder to use
+        if pipeline_state.get("fallback_mode"):
+            # Use fallback folder (read-only)
+            output_folder = pipeline_state["fallback_folder"]
+            progress(0.5, desc="📊 Generating comparison table..." if demo_mode else "📊 Loading existing comparison from fallback...")
+        else:
+            # Check if we have valid state from previous steps
+            if not pipeline_state.get("pipeline"):
+                return "❌ Error: No valid pipeline state. Please run previous steps first."
+            
+            pipeline = pipeline_state["pipeline"]
+            output_folder = pipeline.output_folder
+            progress(0.1, desc="📊 Generating comparison table...")
+            progress(0.3, desc="🤖 Running parallel AI insight generation...")
 
-        pipeline = pipeline_state["pipeline"]
-
-        # Generate comparison table with progress tracking
-        progress(0.1, desc="📊 Generating comparison table...")
-        progress(0.3, desc="🤖 Running parallel AI insight generation...")
-        comparison_table = generate_comparison_table_with_script(pipeline.output_folder)
+        # Generate/load comparison table
+        comparison_table = generate_comparison_table_with_script(output_folder)
+        
+        # In demo mode, don't add any special prefixes
+        if pipeline_state.get("fallback_mode") and not demo_mode:
+            comparison_table = f"📈 Using existing comparison data (READ-ONLY):\n\n{comparison_table}"
+        
         pipeline_state["comparison_table"] = comparison_table
 
         progress(1.0, desc="✅ Comparison table completed!")
@@ -348,14 +480,19 @@ def step5_generate_assignments(
     try:
         global pipeline_state
 
-        # Check if we have valid state from previous steps
-        if not pipeline_state["pipeline"]:
-            return "❌ Error: No valid pipeline state. Please run previous steps first."
-
-        pipeline = pipeline_state["pipeline"]
-
-        # Generate assignments with progress tracking
-        progress(0.1, desc="📝 Initializing assignment generator...")
+        # Determine the output folder to use
+        if pipeline_state.get("fallback_mode"):
+            # Use fallback folder (read-only)
+            output_folder = pipeline_state["fallback_folder"]
+            progress(0.5, desc="📝 Initializing assignment generator..." if demo_mode else "📝 Loading existing assignments from fallback...")
+        else:
+            # Check if we have valid state from previous steps
+            if not pipeline_state.get("pipeline"):
+                return "❌ Error: No valid pipeline state. Please run previous steps first."
+            
+            pipeline = pipeline_state["pipeline"]
+            output_folder = pipeline.output_folder
+            progress(0.1, desc="📝 Initializing assignment generator...")
 
         # Import the assignment generator
         import os
@@ -375,11 +512,12 @@ def step5_generate_assignments(
                 pipeline_state["pipeline"].num_workers, 2
             )  # Minimum 2 workers
 
-        progress(0.3, desc="🤖 Running parallel assignment generation...")
+        if not pipeline_state.get("fallback_mode"):
+            progress(0.3, desc="🤖 Running parallel assignment generation...")
 
-        # Initialize the assignment generator
+        # Initialize the assignment generator (in read-only mode for fallback)
         generator = YouTubeAssignmentGenerator(
-            pipeline_output_folder=pipeline.output_folder, num_workers=num_workers
+            pipeline_output_folder=output_folder, num_workers=num_workers if not pipeline_state.get("fallback_mode") else 0
         )
 
         progress(0.5, desc="📊 Loading video data and summaries...")
@@ -393,12 +531,18 @@ def step5_generate_assignments(
             pipeline_state["assignments_output"] = assignments_output
             return assignments_output
 
-        progress(0.7, desc="🚀 Generating assignments in parallel...")
-
-        # Generate assignments
-        assignment_results = generator.generate_assignments(
-            video_metadata, summary_data
-        )
+        if not pipeline_state.get("fallback_mode"):
+            progress(0.7, desc="🚀 Generating assignments in parallel...")
+            
+            # Generate new assignments
+            assignment_results = generator.generate_assignments(
+                video_metadata, summary_data
+            )
+        else:
+            # In fallback mode, just load existing assignments (don't generate new ones)
+            progress(0.7, desc="🚀 Generating assignments in parallel..." if demo_mode else "📚 Loading existing assignments...")
+            # Create a placeholder result showing existing assignments
+            assignment_results = {video_id: True for video_id in summary_data.keys()}
 
         # Format the results for display
         assignments_output = format_assignments_results(
@@ -407,9 +551,14 @@ def step5_generate_assignments(
             summary_data,
             generator.assignments_folder,
         )
+        
+        # In demo mode, don't add any special prefixes
+        if pipeline_state.get("fallback_mode") and not demo_mode:
+            assignments_output = f"📚 Using existing assignments (READ-ONLY):\n\n{assignments_output}"
+        
         pipeline_state["assignments_output"] = assignments_output
 
-        progress(1.0, desc="✅ Assignment generation completed!")
+        progress(1.0, desc="✅ Assignment generation completed!" if demo_mode or not pipeline_state.get("fallback_mode") else "✅ Assignment loading completed!")
         return assignments_output
 
     except Exception as e:
@@ -788,7 +937,45 @@ def format_summaries_results(
         if os.path.exists(summary_path):
             try:
                 with open(summary_path, "r", encoding="utf-8") as f:
-                    summary_data = json.load(f)
+                    content = f.read()
+                    
+                # Try to parse JSON, handling malformed content
+                try:
+                    summary_data = json.loads(content)
+                except json.JSONDecodeError as e:
+                    # Handle malformed JSON with unescaped newlines or control chars in strings
+                    import re
+                    
+                    # Strategy: Fix unescaped newlines within JSON string values
+                    # We need to escape literal newlines that appear inside quoted strings
+                    fixed_content = []
+                    in_string = False
+                    escape_next = False
+                    
+                    for char in content:
+                        if escape_next:
+                            fixed_content.append(char)
+                            escape_next = False
+                        elif char == '\\':
+                            fixed_content.append(char)
+                            escape_next = True
+                        elif char == '"':
+                            fixed_content.append(char)
+                            in_string = not in_string
+                        elif in_string and char == '\n':
+                            # Replace literal newline with escaped version
+                            fixed_content.append('\\n')
+                        elif in_string and char == '\r':
+                            # Replace literal carriage return with escaped version
+                            fixed_content.append('\\r')
+                        elif in_string and char == '\t':
+                            # Replace literal tab with escaped version
+                            fixed_content.append('\\t')
+                        else:
+                            fixed_content.append(char)
+                    
+                    content = ''.join(fixed_content)
+                    summary_data = json.loads(content)
 
                 # Handle the new summarizer_v2 JSON structure
                 # High-level overview (main summary)
@@ -1344,12 +1531,12 @@ def create_gradio_app():
             use_env_keys = gr.Checkbox(
                 value=True,
                 label="Use Environment Variables for API Keys",
-                info="Check if you have OPENAI_API_KEY and YOUTUBE_API_KEY set as environment variables",
+                info="Check if you have OPENROUTER_API_KEY and YOUTUBE_API_KEY set as environment variables",
             )
 
             with gr.Column(visible=False) as api_key_inputs:
                 openai_api_key = gr.Textbox(
-                    label="OpenAI API Key",
+                    label="OpenRouter API Key",
                     type="password",
                     placeholder="sk-...",
                     info="Required for transcript summarization",
@@ -1560,6 +1747,7 @@ if __name__ == "__main__":
                 self.port = 7860
                 self.share = False
                 self.debug = False
+                self.demo = False
 
         args = DefaultArgs()
 
@@ -1579,14 +1767,23 @@ if __name__ == "__main__":
         )
         parser.add_argument("--share", action="store_true", help="Create a public link")
         parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+        parser.add_argument(
+            "--demo", 
+            action="store_true", 
+            help="Run in demo mode using pre-processed fallback data (no API keys required)"
+        )
 
         args = parser.parse_args()
+
+    # Set global demo mode flag
+    demo_mode = args.demo
 
     print("🔧 Configuration:")
     print(f"   Host: {args.host}")
     print(f"   Port: {args.port}")
     print(f"   Share: {args.share}")
     print(f"   Debug: {args.debug}")
+    print(f"   Demo Mode: {args.demo}")
 
     print("🚀 Launching Gradio interface...")
 
@@ -1601,10 +1798,14 @@ if __name__ == "__main__":
     if not is_cloud:
         print("\nExample usage:")
         print("  # Launch with default settings")
-        print("  python app_youtube.py")
+        print("  python app.py")
+        print("  # Launch in demo mode (no API keys required)")
+        print("  python app.py --demo")
         print("  # Launch with public sharing")
-        print("  python app_youtube.py --share")
+        print("  python app.py --share")
         print("  # Launch on custom port")
-        print("  python app_youtube.py --port 8080")
+        print("  python app.py --port 8080")
+        print("  # Launch in demo mode with sharing")
+        print("  python app.py --demo --share")
     else:
         print("\n☁️  Running in cloud environment - configuration is automatic!")

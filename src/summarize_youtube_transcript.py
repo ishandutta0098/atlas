@@ -29,7 +29,7 @@ class YouTubeTranscriptSummarizer:
         """Initialize the YouTubeTranscriptSummarizer.
 
         Args:
-            api_key (Optional[str]): OpenAI API key. If None, uses OPENAI_API_KEY env var.
+            api_key (Optional[str]): OpenRouter API key. If None, uses OPENROUTER_API_KEY env var.
             num_workers (Optional[int]): Number of concurrent workers for parallel processing.
                 If None, auto-detects based on config and CPU count.
         """
@@ -39,8 +39,8 @@ class YouTubeTranscriptSummarizer:
         setup_logging()
 
         print("[INIT] Setting up OpenAI client...")
-        self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
-        self.model = get_config("api.openai.model", "gpt-4o-mini")
+        self.client = OpenAI(api_key=api_key or os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
+        self.model = get_config("api.openai.model", "openai/gpt-4o-mini")
         self.timeout = get_config("api.openai.timeout", 120)
 
         print("[INIT] Loading prompt template...")
@@ -139,7 +139,7 @@ class YouTubeTranscriptSummarizer:
             print(f"[API-{thread_id}] Making API call to OpenAI...")
 
             # Create a new client instance for thread safety
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            client = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
 
             # Make API call to OpenAI
             response = client.chat.completions.create(

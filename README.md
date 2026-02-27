@@ -34,7 +34,7 @@ Atlas is a comprehensive platform that combines YouTube video analysis, academic
 
 ### Prerequisites
 - Python 3.8+
-- OpenAI API key
+- OpenRouter API key
 - YouTube Data API key
 
 ### Installation
@@ -47,7 +47,7 @@ pip install -r requirements.txt
 ### Environment Setup
 ```bash
 # Create .env file
-echo "OPENAI_API_KEY=your_openai_key" >> .env
+echo "OPENROUTER_API_KEY=your_openrouter_key" >> .env
 echo "YOUTUBE_API_KEY=your_youtube_key" >> .env
 ```
 
@@ -74,7 +74,7 @@ Access the web interface at `http://localhost:7860`
 ## Configuration
 
 Key settings in `src/configs/config.yaml`:
-- **Model**: OpenAI model selection
+- **Model**: OpenRouter model selection (using OpenAI-compatible models)
 - **Workers**: Parallel processing configuration
 - **API**: Timeout and retry settings
 - **Paths**: Output directories and file locations

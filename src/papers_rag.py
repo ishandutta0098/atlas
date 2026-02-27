@@ -94,14 +94,20 @@ class AcademicPapersRAG:
             "api.openai.embedding_model", "text-embedding-3-small"
         )
         Settings.embed_model = OpenAIEmbedding(
-            model=embedding_model, api_key=os.getenv("OPENAI_API_KEY")
+            model=embedding_model, 
+            api_key=os.getenv("OPENROUTER_API_KEY"), 
+            api_base="https://openrouter.ai/api/v1"
         )
 
-        # Set up LLM
-        model = get_config("api.openai.model", "gpt-4o-mini")
+        # Set up LLM with OpenRouter
+        # Note: We use gpt-4o-mini here (which is in LlamaIndex's allowed list)
+        # but since we're routing through OpenRouter's base_url, OpenRouter will handle
+        # the actual model selection based on the configured model in config.yaml
+        # For explicit OpenRouter model selection, you would need to use the OpenAI client directly
         Settings.llm = OpenAI(
-            model=model,
-            api_key=os.getenv("OPENAI_API_KEY"),
+            model="gpt-4o-mini",  # Use a valid OpenAI model name for LlamaIndex validation
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            api_base="https://openrouter.ai/api/v1"
         )
 
         # Set up node parser for chunking

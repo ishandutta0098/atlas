@@ -517,7 +517,7 @@ def main():
     print("=" * 80)
 
     # Validate environment variables
-    required_env_vars = ["YOUTUBE_API_KEY", "OPENAI_API_KEY"]
+    required_env_vars = ["YOUTUBE_API_KEY", "OPENROUTER_API_KEY"]
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
 
     if missing_vars:
@@ -526,7 +526,7 @@ def main():
         )
         print("\nSetup Instructions:")
         print("1. Get YouTube API key: https://console.cloud.google.com/")
-        print("2. Get OpenAI API key: https://platform.openai.com/api-keys")
+        print("2. Get OpenRouter API key: https://openrouter.ai/keys")
         print("3. Set environment variables:")
         for var in missing_vars:
             print(f"   export {var}='your_key_here'")

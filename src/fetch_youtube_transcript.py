@@ -62,6 +62,8 @@ class YouTubeTranscriptFetcher:
                 self.output_folder,
                 get_config("download.output_template", "%(id)s.%(ext)s"),
             ),
+            # Additional options to improve subtitle fetching reliability
+            "ignoreerrors": False,  # Don't ignore errors to get proper feedback
         }
 
     def fetch_transcript(self, url: str) -> bool:

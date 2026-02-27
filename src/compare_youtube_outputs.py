@@ -59,14 +59,14 @@ class YouTubeOutputComparator:
         self.transcripts_folder = self.output_folder / "transcripts"
 
         # Configure OpenAI settings from config
-        self.model = get_config("api.openai.model", "gpt-4o-mini")
+        self.model = get_config("api.openai.model", "openai/gpt-4o-mini")
         self.timeout = get_config("api.openai.timeout", 180)
 
         # Determine number of workers for parallel processing
         self.num_workers = get_worker_count(num_workers)
 
         # Initialize AI insights based on configuration and API key availability
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("OPENROUTER_API_KEY")
         if use_ai_insights is None:
             self.use_ai_insights = bool(api_key)
         else:
@@ -75,11 +75,11 @@ class YouTubeOutputComparator:
         # Initialize OpenAI client if AI insights are enabled
         if self.use_ai_insights:
             if not api_key:
-                print("[WARN] OPENAI_API_KEY not found. AI insights disabled.")
+                print("[WARN] OPENROUTER_API_KEY not found. AI insights disabled.")
                 self.use_ai_insights = False
             else:
-                self.openai_client = OpenAI(api_key=api_key)
-                print(f"[INIT] OpenAI client initialized (model: {self.model})")
+                self.openai_client = OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
+                print(f"[INIT] OpenRouter client initialized (model: {self.model})")
 
         # Validate folders exist
         if not self.output_folder.exists():
@@ -237,7 +237,38 @@ class YouTubeOutputComparator:
                 video_id = summary_file.name.replace("_summary.json", "")
 
                 with open(summary_file, "r", encoding="utf-8") as f:
-                    summary = json.load(f)
+                    content = f.read()
+                
+                # Try to parse JSON, handling malformed content with unescaped newlines
+                try:
+                    summary = json.loads(content)
+                except json.JSONDecodeError:
+                    # Fix unescaped newlines/control chars within JSON string values
+                    fixed_content = []
+                    in_string = False
+                    escape_next = False
+                    
+                    for char in content:
+                        if escape_next:
+                            fixed_content.append(char)
+                            escape_next = False
+                        elif char == '\\':
+                            fixed_content.append(char)
+                            escape_next = True
+                        elif char == '"':
+                            fixed_content.append(char)
+                            in_string = not in_string
+                        elif in_string and char == '\n':
+                            fixed_content.append('\\n')
+                        elif in_string and char == '\r':
+                            fixed_content.append('\\r')
+                        elif in_string and char == '\t':
+                            fixed_content.append('\\t')
+                        else:
+                            fixed_content.append(char)
+                    
+                    content = ''.join(fixed_content)
+                    summary = json.loads(content)
 
                 summary_data[video_id] = summary
                 print(f"[SUMMARY] ✓ Loaded summary for: {video_id}")
@@ -432,9 +463,9 @@ Limitations: {summary.get('limitations', [])}
 
         try:
             # Create a new client instance for thread safety
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            client = OpenAI(api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1")
 
-            # Make API call to OpenAI
+            # Make API call to OpenRouter
             api_start = time.time()
             response = client.chat.completions.create(
                 model=self.model,

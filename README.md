@@ -1,99 +1,301 @@
-# Atlas 🎬
+# Atlas
 
-> AI-Powered Content Analysis Platform for Educational and Research Content
+> AI-powered content analysis platform for technical education and research workflows
 
-Atlas is a comprehensive platform that combines YouTube video analysis, academic paper research, and educational content generation into a unified AI-powered workflow.
+Atlas combines a YouTube analysis pipeline, academic papers RAG, comparison analysis, and assignment generation into a single product-oriented experience. The current application uses a `FastAPI` backend and a React frontend while preserving the original Python pipeline modules for search, transcript extraction, summarization, comparison, and educational content generation.
 
-## Features
+## What Atlas Does
 
-### 🔍 YouTube Pipeline
-- **Video Search**: Natural language search using YouTube Data API
-- **Transcript Extraction**: Automatic subtitle fetching and processing
-- **AI Summarization**: Technical content analysis with structured insights
-- **Comparison Analysis**: Multi-video comparison with AI-powered insights
+### YouTube analysis pipeline
+- Search YouTube videos from a natural language query
+- Fetch subtitles and transcripts for selected videos
+- Generate structured AI summaries focused on technical learning outcomes
+- Compare multiple videos across depth, difficulty, teaching style, and audience fit
+- Generate educational assignments from the analyzed content
 
-### 📚 Academic RAG System
-- **Semantic Search**: Query academic papers using natural language
-- **Citation Tracking**: Source papers with relevance scores
-- **Vector Database**: LanceDB-powered semantic search
-- **Paper Management**: Automatic PDF processing and indexing
+### Academic papers RAG
+- Query indexed PDFs using natural language
+- Return AI-generated responses with citations and source excerpts
+- Use LanceDB-backed retrieval through the existing paper indexing stack
 
-### 📝 Educational Content
-- **Assignment Generation**: AI-created hands-on learning exercises
-- **Learning Objectives**: Structured educational outcomes
-- **Progressive Tasks**: Step-by-step skill building activities
-- **Assessment Criteria**: Clear success metrics and rubrics
+### Product interface
+- Browse existing pipeline runs
+- Explore videos, transcripts, summaries, comparison outputs, and assignments in a modern React UI
+- Trigger fresh pipeline steps through the API when credentials are available
 
-### ⚡ Advanced Processing
-- **Parallel Execution**: Concurrent processing for faster results
-- **Real-time Tracking**: Progressive visualization of pipeline steps
-- **Professional Interface**: Modern web UI with responsive design
-- **Configurable Workers**: Adjustable concurrency for optimal performance
+## Tech Stack
 
-## Quick Start
+### Backend
+- `FastAPI`
+- `Pydantic`
+- Existing pipeline modules in `src/`
+- `LlamaIndex` + `LanceDB` for academic papers retrieval
 
-### Prerequisites
-- Python 3.8+
-- OpenRouter API key
-- YouTube Data API key
+### Frontend
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- TanStack Query
+- Framer Motion
 
-### Installation
-```bash
-git clone https://github.com/ishandutta0098/atlas
-cd atlas
-pip install -r requirements.txt
+## Architecture
+
+Atlas is split into a typed API layer and a React client, while the core domain logic remains in the original Python modules.
+
+```mermaid
+flowchart LR
+  ReactFrontend[ReactFrontend] --> FastAPIBackend[FastAPIBackend]
+  FastAPIBackend --> RunService[RunService]
+  FastAPIBackend --> PipelineService[PipelineService]
+  FastAPIBackend --> PapersService[PapersService]
+  RunService --> PipelineArtifacts[pipeline_output_Artifacts]
+  PipelineService --> YouTubePipeline[YouTubePipeline]
+  PipelineService --> YouTubeComparator[YouTubeOutputComparator]
+  PipelineService --> AssignmentGenerator[YouTubeAssignmentGenerator]
+  PapersService --> AcademicPapersRAG[AcademicPapersRAG]
 ```
 
-### Environment Setup
-```bash
-# Create .env file
-echo "OPENROUTER_API_KEY=your_openrouter_key" >> .env
-echo "YOUTUBE_API_KEY=your_youtube_key" >> .env
-```
+### Backend responsibilities
+- Expose run metadata and artifact endpoints
+- Wrap the existing YouTube and papers workflows
+- Read pipeline artifacts from `pipeline_output_*` folders
+- Provide execution endpoints for live searches and downstream pipeline steps
 
-### Launch Atlas
-```bash
-python app.py
-```
+### Frontend responsibilities
+- Load the latest available run
+- Render structured search, transcript, summary, comparison, and assignment views
+- Query the academic papers system
+- Trigger new runs and artifact generation through the API
 
-Access the web interface at `http://localhost:7860`
+## Core Modules
 
-## Usage
+### Existing domain modules
+- `src/youtube_pipeline.py`
+- `src/compare_youtube_outputs.py`
+- `src/assignment_generator.py`
+- `src/papers_rag.py`
+- `src/fetch_youtube_transcript.py`
+- `src/summarize_youtube_transcript.py`
 
-### 1. YouTube Analysis
-1. Enter a search query (e.g., "Python machine learning tutorial")
-2. Configure max videos and workers
-3. Click "Start Pipeline" to begin processing
-4. View results: search → transcripts → summaries → comparison → assignments
+### Backend API layer
+- `backend/main.py`
+- `backend/routers/runs.py`
+- `backend/routers/pipeline.py`
+- `backend/routers/papers.py`
+- `backend/services/run_service.py`
+- `backend/services/pipeline_service.py`
+- `backend/services/papers_service.py`
+- `backend/services/artifact_readers.py`
 
-### 2. Academic Papers Query
-1. Ensure papers are in `papers/agents/` folder
-2. Enter natural language query
-3. Get AI responses with paper citations and excerpts
-
-## Configuration
-
-Key settings in `src/configs/config.yaml`:
-- **Model**: OpenRouter model selection (using OpenAI-compatible models)
-- **Workers**: Parallel processing configuration
-- **API**: Timeout and retry settings
-- **Paths**: Output directories and file locations
+### Frontend application
+- `frontend/src/App.tsx`
+- `frontend/src/features/pipeline/pipeline-dashboard.tsx`
+- `frontend/src/features/papers/papers-panel.tsx`
+- `frontend/src/lib/api.ts`
+- `frontend/src/lib/types.ts`
 
 ## Project Structure
 
-```
+```text
 atlas/
-├── app.py                          # Main Gradio web interface
-├── src/
-│   ├── youtube_pipeline.py         # YouTube processing pipeline
-│   ├── papers_rag.py              # Academic papers RAG system
-│   ├── assignment_generator.py     # Educational content generator
-│   ├── compare_youtube_outputs.py  # Video comparison analysis
-│   └── configs/config.yaml         # Configuration settings
-├── papers/agents/                  # Academic papers directory
-└── requirements.txt               # Python dependencies
+├── backend/                        # FastAPI application
+│   ├── main.py
+│   ├── routers/
+│   ├── schemas/
+│   └── services/
+├── frontend/                       # React + Vite frontend
+│   ├── src/
+│   ├── package.json
+│   └── vite.config.ts
+├── src/                            # Existing Python domain logic
+│   ├── youtube_pipeline.py
+│   ├── compare_youtube_outputs.py
+│   ├── assignment_generator.py
+│   ├── papers_rag.py
+│   └── configs/config.yaml
+├── papers/agents/                  # Academic PDFs
+├── pipeline_output_*/              # YouTube pipeline artifacts
+├── storage/                        # Indexed papers storage
+├── requirements.txt
+└── README.md
 ```
+
+## Setup
+
+### Prerequisites
+- Conda
+- Node.js 18+
+- npm
+- OpenRouter API key
+- YouTube Data API key
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/ishandutta0098/atlas
+cd atlas
+```
+
+### 2. Activate the conda environment
+
+If your environment already exists:
+
+```bash
+conda activate atlas
+```
+
+If you need to create it first:
+
+```bash
+conda create -n atlas python=3.10 -y
+conda activate atlas
+```
+
+### 3. Install Python dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Install frontend dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 5. Configure environment variables
+
+Create or update `.env` in the repository root:
+
+```bash
+OPENROUTER_API_KEY=your_openrouter_key
+YOUTUBE_API_KEY=your_youtube_key
+```
+
+## Running Atlas
+
+Atlas runs as two processes during development: the FastAPI backend and the React frontend.
+
+### 1. Start the backend
+
+From the repository root:
+
+```bash
+conda activate atlas
+uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Backend health endpoint:
+
+```text
+http://127.0.0.1:8000/api/health
+```
+
+### 2. Start the frontend
+
+In a second terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Frontend development URL:
+
+```text
+http://127.0.0.1:5173
+```
+
+The Vite dev server proxies `/api` requests to `http://127.0.0.1:8000` via `frontend/vite.config.ts`.
+
+## Build Commands
+
+### Frontend
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+### Backend smoke check
+
+```bash
+conda activate atlas
+python -c "from fastapi.testclient import TestClient; from backend.main import app; client = TestClient(app); print(client.get('/api/health').json())"
+```
+
+## API Overview
+
+### Run and artifact endpoints
+- `GET /api/runs`
+- `GET /api/runs/latest`
+- `GET /api/runs/{run_id}`
+- `GET /api/runs/{run_id}/videos`
+- `GET /api/runs/{run_id}/transcripts`
+- `GET /api/runs/{run_id}/summaries`
+- `GET /api/runs/{run_id}/comparison`
+- `GET /api/runs/{run_id}/assignments`
+
+### Pipeline execution endpoints
+- `POST /api/pipeline/search`
+- `POST /api/runs/{run_id}/transcripts`
+- `POST /api/runs/{run_id}/summaries`
+- `POST /api/runs/{run_id}/comparison`
+- `POST /api/runs/{run_id}/assignments`
+
+### Papers endpoints
+- `GET /api/papers/status`
+- `POST /api/papers/query`
+
+## Application Flow
+
+### YouTube workflow
+1. Submit a query through the frontend
+2. Backend creates or reuses a pipeline run
+3. Video metadata is exposed from run artifacts
+4. Transcript, summary, comparison, and assignment artifacts are read or generated
+5. The frontend renders each stage as a separate structured view
+
+### Papers workflow
+1. Frontend sends a natural language query to `POST /api/papers/query`
+2. FastAPI delegates to `AcademicPapersRAG`
+3. The response includes answer text, citations, excerpts, and timing metadata
+
+## Configuration
+
+Primary runtime configuration lives in `src/configs/config.yaml`.
+
+Important settings include:
+- OpenRouter model selection
+- worker counts and concurrency behavior
+- transcript language defaults
+- YouTube API settings
+- prompt paths and output directory settings
+
+## Data and Storage
+
+### YouTube artifacts
+Each pipeline run writes files under a `pipeline_output_<timestamp>` folder:
+- `metadata/search_results_*.json`
+- `metadata/fetch_results_*.json`
+- `metadata/summary_results_*.json`
+- `transcripts/*.srt`
+- `summaries/*_summary.json`
+- `assignments/*_assignment.md`
+
+### Academic papers storage
+- PDFs live in `papers/agents/`
+- paper index storage lives in `storage/papers_index/`
+- vector store data lives in `storage/papers_vectordb/`
+
+## Legacy Interface
+
+The original Gradio application still exists in `app.py` as a legacy interface, but the primary development path is now the FastAPI backend plus the React frontend.
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT License. See `LICENSE` for details.

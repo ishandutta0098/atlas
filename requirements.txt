@@ -7,6 +7,8 @@ pandas
 tabulate
 openpyxl
 gradio
+fastapi
+uvicorn
 yt-dlp>=2025.9.26
 curl-cffi
 pyyaml

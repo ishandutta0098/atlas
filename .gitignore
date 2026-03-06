@@ -81,4 +81,10 @@ temp*
 storage
 data
 tutorial*
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/tsconfig.json
+!frontend/tsconfig.app.json
+!frontend/tsconfig.node.json
+!frontend/components.json
 # End of Selection

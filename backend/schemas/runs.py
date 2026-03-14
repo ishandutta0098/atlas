@@ -131,7 +131,10 @@ class AssignmentArtifact(BaseModel):
     url: str = ""
     assignment_path: Optional[str] = None
     metadata: dict = Field(default_factory=dict)
+    display_metadata: dict[str, str] = Field(default_factory=dict)
     markdown: str = ""
+    sections: list[dict] = Field(default_factory=list)
+    checklist: list[dict] = Field(default_factory=list)
     available: bool = False
 
 

@@ -120,7 +120,18 @@ export interface AssignmentArtifact {
   url: string
   assignment_path: string | null
   metadata: Record<string, unknown>
+  display_metadata: Record<string, string>
   markdown: string
+  sections: Array<{
+    id: string
+    title: string
+    kind: string
+    markdown: string
+  }>
+  checklist: Array<{
+    id: string
+    label: string
+  }>
   available: boolean
 }
 

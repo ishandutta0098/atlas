@@ -206,6 +206,77 @@ def parse_assignment_file(path: Path) -> tuple[dict[str, Any], str]:
     return metadata, body.strip()
 
 
+def _slugify_assignment_title(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug or "section"
+
+
+def _strip_heading_prefix(value: str) -> str:
+    cleaned = re.sub(r"^[#\s]+", "", value).strip()
+    cleaned = re.sub(r"^\d+[\).\s-]+", "", cleaned).strip()
+    return cleaned
+
+
+def _looks_like_task_heading(value: str) -> bool:
+    lowered = value.lower()
+    return lowered.startswith("task ") or lowered.startswith("exercise ") or lowered.startswith("advanced ")
+
+
+def _parse_assignment_sections(markdown: str) -> list[dict[str, Any]]:
+    section_pattern = re.compile(
+        r"(?m)^(#{2,3}\s+.+?|(?:Task|Exercise)\s+\d+[^\n]*|Advanced\s+\d+[^\n]*)$"
+    )
+    matches = list(section_pattern.finditer(markdown))
+    if not matches:
+        return []
+
+    sections: list[dict[str, Any]] = []
+    for index, match in enumerate(matches):
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(markdown)
+        heading = match.group(0).strip()
+        body = markdown[match.end() : end].strip()
+        title = _strip_heading_prefix(heading)
+        kind = "task" if _looks_like_task_heading(title) else "section"
+        sections.append(
+            {
+                "id": _slugify_assignment_title(title),
+                "title": title,
+                "kind": kind,
+                "markdown": body,
+            }
+        )
+
+    return sections
+
+
+def _parse_assignment_checklist(markdown: str) -> list[dict[str, str]]:
+    items: list[dict[str, str]] = []
+    for line in markdown.splitlines():
+        match = re.match(r"^\s*-\s*\[(?: |x|X)\]\s+(.*)$", line)
+        if not match:
+            continue
+        label = match.group(1).strip()
+        items.append({"id": _slugify_assignment_title(label), "label": label})
+    return items
+
+
+def _build_assignment_display_metadata(metadata: dict[str, Any]) -> dict[str, str]:
+    allowed_keys = (
+        "difficulty_level",
+        "model_used",
+        "channel",
+        "video_id",
+        "video_title",
+        "video_url",
+    )
+    return {
+        key: str(value)
+        for key, value in metadata.items()
+        if key in allowed_keys and value not in (None, "")
+    }
+
+
 def read_assignments(run_dir: Path) -> list[AssignmentArtifact]:
     assignments_dir = run_dir / "assignments"
     video_index = build_video_index(run_dir)
@@ -215,8 +286,12 @@ def read_assignments(run_dir: Path) -> list[AssignmentArtifact]:
         assignment_path = assignments_dir / f"{video_id}_assignment.md"
         metadata: dict[str, Any] = {}
         markdown = ""
+        sections: list[dict[str, Any]] = []
+        checklist: list[dict[str, str]] = []
         if assignment_path.exists():
             metadata, markdown = parse_assignment_file(assignment_path)
+            sections = _parse_assignment_sections(markdown)
+            checklist = _parse_assignment_checklist(markdown)
 
         artifacts.append(
             AssignmentArtifact(
@@ -226,7 +301,10 @@ def read_assignments(run_dir: Path) -> list[AssignmentArtifact]:
                 url=video.url,
                 assignment_path=str(assignment_path) if assignment_path.exists() else None,
                 metadata=metadata,
+                display_metadata=_build_assignment_display_metadata(metadata),
                 markdown=markdown,
+                sections=sections,
+                checklist=checklist,
                 available=assignment_path.exists(),
             )
         )

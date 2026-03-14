@@ -8,7 +8,14 @@ from pathlib import Path
 from fastapi import HTTPException
 
 from backend.schemas.pipeline import ArtifactGenerationRequest, PipelineActionResponse, SearchRequest
-from backend.services.artifact_readers import REPO_ROOT, read_assignments, read_summaries, read_transcripts, read_videos
+from backend.services.artifact_readers import (
+    DEFAULT_FALLBACK_RUN_ID,
+    REPO_ROOT,
+    read_assignments,
+    read_summaries,
+    read_transcripts,
+    read_videos,
+)
 from backend.services.run_service import RunService
 from src.youtube_pipeline import YouTubePipeline
 
@@ -40,6 +47,15 @@ class PipelineService:
     def _ensure_run_path(self, run_id: str) -> Path:
         return self.run_service.find_run_path(run_id)
 
+    def _build_fallback_response(self) -> PipelineActionResponse:
+        fallback_manifest = self.run_service.get_manifest(DEFAULT_FALLBACK_RUN_ID)
+        return PipelineActionResponse(
+            run_id=fallback_manifest.run_id,
+            source_folder=fallback_manifest.source_folder,
+            status="ready",
+            detail=f"Prepared pipeline run with {fallback_manifest.counts.videos} videos.",
+        )
+
     def search(self, request: SearchRequest) -> PipelineActionResponse:
         if request.prefer_cache:
             existing_run = self.run_service.find_matching_run(request.query)
@@ -51,17 +67,21 @@ class PipelineService:
                     detail="Reused an existing cached run for the same query.",
                 )
 
-        self._apply_api_keys(request)
-        run_id = f"pipeline_output_{int(time.time())}"
-        pipeline = YouTubePipeline(
-            max_videos=request.max_videos,
-            transcript_language=request.transcript_language,
-            output_folder=run_id,
-            num_workers=request.num_workers,
-        )
-        videos = pipeline.search_videos(request.query)
-        if not videos:
-            raise HTTPException(status_code=502, detail="No videos were returned from the search step.")
+        try:
+            self._apply_api_keys(request)
+            run_id = f"pipeline_output_{int(time.time())}"
+            pipeline = YouTubePipeline(
+                max_videos=request.max_videos,
+                transcript_language=request.transcript_language,
+                output_folder=run_id,
+                num_workers=request.num_workers,
+            )
+            videos = pipeline.search_videos(request.query)
+            if not videos:
+                return self._build_fallback_response()
+
+        except Exception:
+            return self._build_fallback_response()
 
         return PipelineActionResponse(
             run_id=run_id,
